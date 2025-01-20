@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "PRo3D.OpcViewer": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "pro3d-data": "C:\\pro3ddata"
+      }
+    }
+  }
+}

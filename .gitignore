@@ -1,0 +1,7 @@
+/.vs/**
+**/bin/**
+**/obj/**
+*.g.fs
+/PRo3D.WebViewer/*.tmp
+/paket-files
+.vs
