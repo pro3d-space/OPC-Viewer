@@ -67,9 +67,7 @@ module OpcViewer =
         let hierarchies = 
             scene.patchHierarchies |> Seq.toList |> List.map (fun basePath -> 
                 let h = PatchHierarchy.load serializer.Pickle serializer.UnPickle (OpcPaths.OpcPaths basePath)
-                let t = PatchLod.toRoseTree h.tree
-                
-                Sg.patchLod win.FramebufferSignature runner basePath scene.lodDecider false false ViewerModality.XYZ PatchLod.CoordinatesMapping.Local true t
+                OpcRendering.createSceneGraphCustom win.FramebufferSignature runner basePath h
             )
 
         let speed = AVal.init scene.speed
