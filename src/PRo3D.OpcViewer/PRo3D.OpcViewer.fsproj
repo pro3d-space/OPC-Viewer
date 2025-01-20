@@ -5,6 +5,7 @@
     <TargetFramework>net8.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="OpcDataProcessing.fs" />
     <Compile Include="OpcRendering.fs" />
     <Compile Include="Viewer.fs" />
     <Compile Include="Program.fs" />

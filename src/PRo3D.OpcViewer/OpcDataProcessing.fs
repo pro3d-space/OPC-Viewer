@@ -6,6 +6,30 @@ open System.Collections.Generic
 open Aardvark.Base
 open Aardvark.Data.Opc
 open Aardvark.GeoSpatial.Opc.Configurations
+open Aardvark.Data.Opc.Aara
+open Aardvark.Rendering
+
+
+module QTree =
+
+    open Aardvark.Data.Opc
+
+    let rec foldCulled 
+        (consider : Box3d -> bool) 
+        (f        : Patch -> 's -> 's) 
+        (seed     : 's) 
+        (tree     : QTree<Patch>) =
+        match tree with
+        | QTree.Node(p, children) -> 
+            if consider p.info.GlobalBoundingBox then
+                Seq.fold (foldCulled consider f) seed children
+            else
+                seed
+        | QTree.Leaf(p) -> 
+            if consider p.info.GlobalBoundingBox then
+                f p seed
+            else
+                seed
 
 module OpcDataProcessing =
 //    let loadAttibuteLayer =
