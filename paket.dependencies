@@ -36,3 +36,5 @@ nuget Aardvark.Dom.Remote ~> 1.0.5
 nuget Aardvark.FontProvider ~> 0.1.0
 
 nuget Aardvark.Data.Opc
+
+nuget Argu ~> 6.2.5
