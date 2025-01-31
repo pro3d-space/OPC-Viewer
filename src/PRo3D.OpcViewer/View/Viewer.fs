@@ -51,7 +51,7 @@ module Shader =
 module OpcViewer = 
     
 
-    let run (scene : OpcScene) =
+    let run (scene : OpcScene) (initialCameraView : CameraView) =
 
         Aardvark.Init()
 
@@ -72,9 +72,9 @@ module OpcViewer =
 
         let speed = AVal.init scene.speed
 
-        let bb = scene.boundingBox
-        let initialView = CameraView.lookAt bb.Max bb.Center bb.Center.Normalized
-        let view = initialView |> DefaultCameraController.controlWithSpeed speed win.Mouse win.Keyboard win.Time
+        //let bb = scene.boundingBox
+        //let initialView = CameraView.lookAt bb.Max bb.Center bb.Center.Normalized
+        let view = initialCameraView |> DefaultCameraController.controlWithSpeed speed win.Mouse win.Keyboard win.Time
         let frustum = win.Sizes |> AVal.map (fun s -> Frustum.perspective 60.0 scene.near scene.far (float s.X / float s.Y))
 
         let lodVisEnabled = cval true

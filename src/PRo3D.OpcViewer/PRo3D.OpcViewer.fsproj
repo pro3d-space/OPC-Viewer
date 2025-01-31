@@ -5,9 +5,14 @@
     <TargetFramework>net8.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <None Include="paket.references" />
+    <Compile Include="LayerManagement.fs" />
+    <Compile Include="List\ListCommand.fs" />
+    <Compile Include="View\OpcRendering.fs" />
+    <Compile Include="View\Viewer.fs" />
+    <Compile Include="View\ViewCommand.fs" />
     <Compile Include="OpcDataProcessing.fs" />
-    <Compile Include="OpcRendering.fs" />
-    <Compile Include="Viewer.fs" />
+    <Compile Include="Usage.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
