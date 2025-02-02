@@ -6,8 +6,9 @@
   </PropertyGroup>
   <ItemGroup>
     <None Include="paket.references" />
-    <Compile Include="LayerManagement.fs" />
+    <Compile Include="LayerUtils.fs" />
     <Compile Include="List\ListCommand.fs" />
+    <Compile Include="Diff\DiffCommand.fs" />
     <Compile Include="View\OpcRendering.fs" />
     <Compile Include="View\Viewer.fs" />
     <Compile Include="View\ViewCommand.fs" />

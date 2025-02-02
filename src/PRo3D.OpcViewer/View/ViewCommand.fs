@@ -6,7 +6,6 @@ open Aardvark.GeoSpatial.Opc
 open Aardvark.Opc
 open Aardvark.Rendering
 open Argu
-open MBrace.FsPickler
 open PRo3D.OpcViewer
 
 [<AutoOpen>]
@@ -14,11 +13,13 @@ module ViewCommand =
 
     type Args =
         | [<MainCommand>] DataDirs of data_dir: string list
+        | Speed of float
 
         interface IArgParserTemplate with
             member s.Usage =
                 match s with
                 | DataDirs _ -> "specify data directories"
+                | Speed    _ -> "optional camera controller speed"
 
     let run (args : ParseResults<Args>) : int =
 
@@ -31,17 +32,18 @@ module ViewCommand =
                 []
 
          // discover all layers in datadirs ...
-        let layerInfos = LayerManagement.searchLayerDirs datadirs
+        let layerInfos = LayerUtils.searchLayerDirs datadirs
         
-        // load layers from disk ...
-        let serializer = FsPickler.CreateBinarySerializer()
+        // load patch hierarchies ...
         let patchHierarchies = 
-            layerInfos 
+            layerInfos
             |> Seq.toList 
-            |> List.map (fun info -> PatchHierarchy.load serializer.Pickle serializer.UnPickle (OpcPaths.OpcPaths info.Path.FullName))
+            |> List.map LayerUtils.loadPatchHierarchy
+
+        // get root patch from each hierarchy
         let patches =
             patchHierarchies
-            |> List.map (fun x -> match x.tree with | QTree.Node (n, _) -> n | QTree.Leaf n      -> n)
+            |> List.map (fun x -> match x.tree with | QTree.Node (n, _) -> n | QTree.Leaf n -> n)
 
          // global bounding box over all patches
         let gbb = patches |> Seq.map (fun patch -> patch.info.GlobalBoundingBox) |> Box3d
@@ -51,8 +53,8 @@ module ViewCommand =
             let plane = Plane3d(globalSky, 0.0)
             let plane2global pos = gbb.Center + plane.GetPlaneSpaceTransform().TransformPos(pos)
 
-            let d = gbb.Size.Length * 0.5
-            let localLocation = V3d(d * 0.2, d * 0.1, d * 0.5)
+            let d = gbb.Size.Length
+            let localLocation = V3d(d * 0.1, d * 0.05, d * 0.25)
             let localLookAt   = V3d.Zero
 
             let globalLocation = plane2global localLocation
@@ -60,23 +62,27 @@ module ViewCommand =
 
             let cam = CameraView.lookAt globalLocation globalLookAt globalSky
 
-            cam
+            let far = d * 1.5
+            let near = far / 1024.0
 
+            (cam, near, far)
 
-        // create OpcScene ... 
+        // create OpcScene ...
+        let (initialCam, near, far) = createInitialCameraView gbb
+        let speed = args.GetResult(Speed, defaultValue = far / 64.0)
         let scene =
             { 
                 useCompressedTextures = true
                 preTransform     = Trafo3d.Identity
                 patchHierarchies = Seq.delay (fun _ -> layerInfos |> Seq.map (fun info -> info.Path.FullName))
                 boundingBox      = gbb
-                near             = 0.1
-                far              = 10000.0
-                speed            = 5.0
+                near             = near
+                far              = far
+                speed            = speed
                 lodDecider       = DefaultMetrics.mars2 
             }
 
         // ... and show it
-        let initialCam = createInitialCameraView gbb
+        
         OpcViewer.run scene initialCam
         

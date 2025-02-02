@@ -17,6 +17,7 @@ let main argv =
             exit 1
     
     match arguments.GetAllResults() with
+    | [Diff x]  -> DiffCommand.run x
     | [List x]  -> ListCommand.run x
     | [View x]  -> ViewCommand.run x
     | [Version] -> printfn "%s" VERSION; exit 0

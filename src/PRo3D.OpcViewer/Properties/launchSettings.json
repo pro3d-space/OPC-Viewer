@@ -2,6 +2,7 @@
   "profiles": {
     "PRo3D.OpcViewer": {
       "commandName": "Project",
+      "commandLineArgs": "ls W:\\Datasets\\Pro3D",
       "environmentVariables": {
         "pro3d-data": "C:\\pro3ddata"
       }
