@@ -46,6 +46,14 @@ module LayerUtils =
     let searchLayerDir (dir : string) : LayerInfo list =
         searchLayerDirs [dir]
 
+    let rec traverse root includeInner = seq {
+        match root with
+        | QTree.Node (n, xs) ->
+            if includeInner then yield n
+            for x in xs do yield! traverse x includeInner
+        | QTree.Leaf n -> yield n
+        }
+       
     let getPatchHierarchyStats (patchHierarchy : PatchHierarchy) : PatchHierarchyStats =
 
         let mutable countLeafNodes = 0
@@ -85,14 +93,6 @@ module LayerUtils =
         let patch = match root.tree with | QTree.Node (n, _) -> n | QTree.Leaf n -> n
         let ig, _ = Patch.load root.opcPaths ViewerModality.XYZ patch.info
       
-        let rec traverse root includeInner = seq {
-            match root with
-            | QTree.Node (n, xs) ->
-                if includeInner then yield n
-                for x in xs do yield! traverse x includeInner
-            | QTree.Leaf n -> yield n
-            }
-            
         let mutable totalLeafNodes  = 0
         let mutable totalPoints = 0
         let mutable totalFaces  = 0
