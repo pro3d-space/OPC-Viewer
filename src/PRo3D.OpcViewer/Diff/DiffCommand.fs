@@ -67,70 +67,23 @@ module DiffCommand =
 
         // ... todo/wip
 
-        let mainRoot = mainLayer.LoadPatchHierarchy ()
-        let mainRootPatch = match mainRoot.tree with | QTree.Node (n, _) -> n | QTree.Leaf n -> n
-        let mainGbb = mainRootPatch.info.GlobalBoundingBox
-        let mainGlobalSky = mainGbb.Center.Normalized
+        let layerMain = mainLayer.LoadPatchHierarchy ()
+        let layerOther = otherLayer.LoadPatchHierarchy ()
 
-        let mainTriangles =
-            
-            let sw = System.Diagnostics.Stopwatch.StartNew()
+        let sky = LayerUtils.getSky layerMain
 
-            //let mutable psAll = List.empty<V3f>
-            let mutable triangles = List.empty<Triangle3d>
-            let mutable totalTriangleCount = 0
-            let leafs = LayerUtils.traverse mainRoot.tree false
-            for n in leafs do
-                // printfn "%A" n
-                let ig, _ = Patch.load mainRoot.opcPaths ViewerModality.XYZ n.info
-
-                totalTriangleCount <- totalTriangleCount + ig.FaceCount
-
-                let ia = 
-                    if ig.IsIndexed then
-                        match ig.IndexArray with
-                        | :? array<int> as idx -> idx
-                        | _ -> failwith "[Queries] Patch index geometry has no int[] index"
-                    else
-                        failwith "[Queries] Patch index geometry is not indexed."
-                let ps = 
-                    match ig.IndexedAttributes[DefaultSemantic.Positions] with
-                    | (:? array<V3f> as v) when not (isNull v) -> v
-                    | _ -> failwith ""
-
-                let l2g = n.info.Local2Global
-                let tp (p : V3f) : V3d = l2g.TransformPos (V3d(p))
-                let transform (t : Triangle3f) : Triangle3d = Triangle3d(tp t.P0, tp t.P1, tp t.P2)
-
-                for i in 0 .. 3 ..  ia.Length - 3 do
-                    let t = Triangle3f(ps[ia[i]], ps[ia[i + 1]], ps[ia[i + 2]]) // local space
-                    let r = Ray3f.Invalid
-                    let (isHit, x) = t.Intersects(r)
-                    let isNan = t.P0.IsNaN || t.P1.IsNaN || t.P2.IsNaN
-                    match isNan with
-                    | true -> ()
-                    | false -> triangles <- transform t :: triangles
-
-                //psAll <- ps |> List.ofArray |> List.append psAll
-                ()
-            
-            sw.Stop()
-            printfn "%A" sw.Elapsed
-            printfn "dismissed %s triangles (because NaN)" ((totalTriangleCount - triangles.Length).ToString("N0"))
-            printfn "there are %s triangles left" (triangles.Length.ToString("N0"))
-
-            triangles
+        let trianglesMainWithNaN = LayerUtils.getTriangles false layerMain
+        let trianglesMain = trianglesMainWithNaN |> List.filter LayerUtils.isValidTriangle
 
         
-        let otherRoot = otherLayer.LoadPatchHierarchy ()
-        //let otherRoot = mainRoot
-        do
-            let sky = mainGlobalSky
-            let leafs = LayerUtils.traverse otherRoot.tree false
-            for n in leafs do
-                let ig, _ = Patch.load otherRoot.opcPaths ViewerModality.XYZ n.info
 
-                let l2g = n.info.Local2Global
+        do
+            let nodes = LayerUtils.traverse layerOther.tree false
+            for node in nodes do
+
+                let ig, _ = Patch.load layerOther.opcPaths ViewerModality.XYZ node.info
+
+                let l2g = node.info.Local2Global
                 let tp (p : V3f) : V3d = l2g.TransformPos (V3d(p))
 
                 let ps = 
@@ -145,8 +98,8 @@ module DiffCommand =
                     let mutable isValid = false
                     let mutable nearestAbs = infinity
                     let mutable nearest = 0.0
-                    let ray = Ray3d(p - sky * 65536.0, sky)
-                    for t in mainTriangles do
+                    let ray = Ray3d(p, sky)
+                    for t in trianglesMain do
                         let (isHit, dist) = t.Intersects(ray)
                         if isHit then
                             isValid <- true
@@ -156,24 +109,7 @@ module DiffCommand =
                                 nearest <- dist
 
                     if isValid then
-                        printfn "%A %A" p nearest
+                        printfn "%-64s %A" (sprintf "%A" p) nearest
             
-
-        //printfn "count positions: %d" psAll.Length
-
-        //psAll <- psAll |> List.filter (fun p -> not p.IsNaN)
-        
-        //printfn "count positions: %d" psAll.Length
-        
-
-        //let patch = match mainRoot.tree with | QTree.Node (n, _) -> n | QTree.Leaf n -> n
-
-        //let ig, _ = Patch.load mainRoot.opcPaths ViewerModality.XYZ patch.info
-        //let positions = 
-        //    match ig.IndexedAttributes[DefaultSemantic.Positions] with
-        //    | (:? array<V3f> as v) when not (isNull v) -> v
-        //    | _ -> failwith "[Queries] Patch has no V3f[] positions"
-
-        //mainLayer.PrintInfo ()
 
         0

@@ -8,6 +8,7 @@
     <None Include="paket.references" />
     <Compile Include="LayerUtils.fs" />
     <Compile Include="Diff\DiffCommand.fs" />
+    <Compile Include="Export\ExportCommand.fs" />
     <Compile Include="Info\InfoCommand.fs" />
     <Compile Include="List\ListCommand.fs" />
     <Compile Include="View\OpcRendering.fs" />

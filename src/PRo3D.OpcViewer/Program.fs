@@ -17,9 +17,10 @@ let main argv =
             exit 1
     
     match arguments.GetAllResults() with
-    | [Diff x]  -> DiffCommand.run x
-    | [Info x]  -> InfoCommand.run x
-    | [List x]  -> ListCommand.run x
-    | [View x]  -> ViewCommand.run x
-    | [Version] -> printfn "%s" VERSION; exit 0
-    | _         -> printfn "%s" (parser.PrintUsage()); exit 1
+    | [Diff x]   -> DiffCommand.run x
+    | [Export x] -> ExportCommand.run x
+    | [Info x]   -> InfoCommand.run x
+    | [List x]   -> ListCommand.run x
+    | [View x]   -> ViewCommand.run x
+    | [Version]  -> printfn "%s" VERSION; exit 0
+    | _          -> printfn "%s" (parser.PrintUsage()); exit 1

@@ -2,7 +2,7 @@
   "profiles": {
     "PRo3D.OpcViewer": {
       "commandName": "Project",
-      "commandLineArgs": "diff --main W:\\Datasets\\Pro3D\\2024\\VictoriaCrater\\HiRISE_VictoriaCrater\\OPC_000_002 --other W:\\Datasets\\Pro3D\\2024\\VictoriaCrater\\HiRISE_VictoriaCrater\\OPC_001_002 -v",
+      "commandLineArgs": "diff --main W:\\Datasets\\Pro3D\\2024\\VictoriaCrater\\HiRISE_VictoriaCrater\\OPC_001_002 --other W:\\Datasets\\Pro3D\\2024\\VictoriaCrater\\HiRISE_VictoriaCrater_SuperResolution\\OPC_000_000 -v",
       "environmentVariables": {
         "pro3d-data": "C:\\pro3ddata"
       }

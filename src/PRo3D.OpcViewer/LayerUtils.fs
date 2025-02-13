@@ -27,6 +27,7 @@ module LayerUtils =
     let private (+/) path1 path2 = Path.Combine(path1, path2)
     let private serializer = FsPickler.CreateBinarySerializer()
 
+    /// Loads patch hierarchy for given layer info from disk.
     let loadPatchHierarchy (info : LayerInfo) : PatchHierarchy =
         PatchHierarchy.load serializer.Pickle serializer.UnPickle (OpcPaths.OpcPaths info.Path.FullName)
 
@@ -48,14 +49,16 @@ module LayerUtils =
     let searchLayerDir (dir : string) : LayerInfo list =
         searchLayerDirs [dir]
 
-    let rec traverse root includeInner = seq {
+    /// Enumerates all nodes of a QTree in depth-first order.
+    let rec traverse (root : QTree<'a>) (includeInner : bool) : 'a seq = seq {
         match root with
         | QTree.Node (n, xs) ->
             if includeInner then yield n
             for x in xs do yield! traverse x includeInner
         | QTree.Leaf n -> yield n
         }
-       
+    
+    /// Compiles stats for given PatchHierarchy.
     let getPatchHierarchyStats (patchHierarchy : PatchHierarchy) : PatchHierarchyStats =
 
         let mutable countLeafNodes = 0
@@ -100,36 +103,30 @@ module LayerUtils =
             SingleAttributes = if ig.SingleAttributes <> null then ig.SingleAttributes.Keys |> Array.ofSeq else Array.empty
         }
 
-    //let printPatchInfo (info : LayerInfo) =
-    //    let root = loadPatchHierarchy info
-    //    let patch = match root.tree with | QTree.Node (n, _) -> n | QTree.Leaf n -> n
-    //    let ig, _ = Patch.load root.opcPaths ViewerModality.XYZ patch.info
-      
-    //    let mutable totalLeafNodes  = 0
-    //    let mutable totalPoints = 0
-    //    let mutable totalFaces  = 0
-    //    for x in traverse root.tree false do
-    //        let ig, _ = Patch.load root.opcPaths ViewerModality.XYZ patch.info
-    //        let positions = 
-    //            match ig.IndexedAttributes[DefaultSemantic.Positions] with
-    //            | (:? array<V3f> as v) when not (isNull v) -> v
-    //            | _ -> failwith "[Queries] Patch has no V3f[] positions"
-    //        //printfn "%A %d %d" x.info.Name x.level positions.Length
-    //        totalLeafNodes <- totalLeafNodes + 1
-    //        totalPoints    <- totalPoints + positions.Length
-    //        totalFaces     <- totalFaces + ig.FaceCount
-             
-    //    if ig.IndexedAttributes <> null then
-    //        printfn "indexed attributes"
-    //        for a in ig.IndexedAttributes.Keys do printfn "    %A" a
-    //    if ig.SingleAttributes  <> null then
-    //        printfn "single attributes"
-    //        for a in ig.SingleAttributes.Keys do printfn "    %A" a
-    //    printfn "leaf nodes  %16d" totalLeafNodes
-    //    printfn "     points %16d" totalPoints
-    //    printfn "     faces  %16d" totalFaces
+    /// Returns true if triangle contains at least one vertex which is NaN.
+    let isInvalidTriangle (triangle : Triangle3d) : bool = triangle.P0.IsNaN || triangle.P1.IsNaN || triangle.P2.IsNaN
+    
+    /// Returns true if triangle does not contain NaN vertices.
+    let isValidTriangle (triangle : Triangle3d) : bool = not (isInvalidTriangle triangle)
 
-    let printLayerInfo (info : LayerInfo) =
+    /// Returns true if triangle contains at least one vertex which is NaN.
+    let isInvalidTriangleF (triangle : Triangle3f) : bool = triangle.P0.IsNaN || triangle.P1.IsNaN || triangle.P2.IsNaN
+
+    /// Returns true if triangle does not contain NaN vertices.
+    let isValidTriangleF (triangle : Triangle3f) : bool = not (isInvalidTriangleF triangle)
+
+    /// Gets sky vector for given patch hierarchy.
+    /// Warning: Implementation is dubious. 
+    /// While the sky direction seems approximately right, this is most probably not the correct or exact vector.
+    let getSky (patchHierarchy : PatchHierarchy) : V3d =
+        let rootPatch = match patchHierarchy.tree with | QTree.Node (n, _) -> n | QTree.Leaf n -> n
+        let gbb = rootPatch.info.GlobalBoundingBox
+        let sky = gbb.Center.Normalized
+        sky
+
+    /// Prints a short summary of given LayerInfo.
+    /// E.g. attributes and various counts for nodes, vertices and faces.
+    let printLayerInfo (info : LayerInfo) : unit =
         printfn "%s" info.Path.FullName
 
         let f (i : int) = i.ToString("N0")
@@ -147,10 +144,75 @@ module LayerUtils =
         printfn "    vertices %12s" (f(stats.CountVertices))
         printfn "    faces    %12s" (f(stats.CountFaces))
 
+    /// Returns all points of given patch.
+    /// Coordinates are in world space.
+    let getPointsPatch (excludeNaN : bool) (hierarchy : PatchHierarchy) (node : Patch) : V3d list =
+        let ig, _ = Patch.load hierarchy.opcPaths ViewerModality.XYZ node.info
+        let l2g = node.info.Local2Global
+        let ps0 = 
+            match ig.IndexedAttributes[DefaultSemantic.Positions] with
+            | (:? array<V3f> as v) when not (isNull v) -> v
+            | _ -> failwith ""
+
+        let ps1 = if excludeNaN then ps0 |> Seq.filter (fun p -> not p.IsNaN) else ps0
+        let ps = ps1 |> Seq.map (fun p -> l2g.TransformPos (V3d(p))) |> List.ofSeq
+        ps
+
+    /// Returns all points of the PatchHierarchy's most detailed level.
+    /// Coordinates are in world space.
+    let getPoints (excludeNaN : bool) (hierarchy : PatchHierarchy) : V3d list =
+        traverse hierarchy.tree false 
+        |> Seq.collect (getPointsPatch excludeNaN hierarchy)
+        |> List.ofSeq
+      
+    /// Returns all triangles of given patch.
+    /// Coordinates are in world space.
+    let getTrianglesPatch (excludeNaN : bool) (hierarchy : PatchHierarchy) (node : Patch) : Triangle3d list =
+        
+        let ig, _ = Patch.load hierarchy.opcPaths ViewerModality.XYZ node.info
+
+        let ia = 
+            if ig.IsIndexed then
+                match ig.IndexArray with
+                | :? array<int> as idx -> idx
+                | _ -> failwith "[Queries] Patch index geometry has no int[] index"
+            else
+                failwith "[Queries] Patch index geometry is not indexed."
+
+        let ps = 
+            match ig.IndexedAttributes[DefaultSemantic.Positions] with
+            | (:? array<V3f> as v) when not (isNull v) -> v
+            | _ -> failwith ""
+
+        let l2g = node.info.Local2Global
+        let tp (p : V3f) : V3d = l2g.TransformPos (V3d(p))
+        let transform (t : Triangle3f) : Triangle3d = Triangle3d(tp t.P0, tp t.P1, tp t.P2)
+
+        let triangles = seq {
+            for i in 0 .. 3 ..  ia.Length - 3 do
+                let t = Triangle3f(ps[ia[i]], ps[ia[i + 1]], ps[ia[i + 2]]) // local space
+                if not (excludeNaN && (isInvalidTriangleF t)) then
+                    yield transform t
+        }
+
+        triangles |> List.ofSeq
+
+    /// Returns all triangles of the PatchHierarchy's most detailed level.
+    /// Coordinates are in world space.
+    let getTriangles (excludeNaN : bool) (hierarchy : PatchHierarchy)  : Triangle3d list =
+        traverse hierarchy.tree false 
+        |> Seq.collect (getTrianglesPatch excludeNaN hierarchy)
+        |> List.ofSeq
 
 
 type LayerInfo with
 
-    member this.LoadPatchHierarchy () = LayerUtils.loadPatchHierarchy this
+    member this.LoadPatchHierarchy () =
+        this |> LayerUtils.loadPatchHierarchy
 
-    //member this.PrintInfo () = LayerUtils.printPatchInfo this
+    member this.GetPoints (excludeNaN : bool) =
+        this |> LayerUtils.loadPatchHierarchy |> LayerUtils.getPoints excludeNaN
+
+    member this.GetTriangles (excludeNaN : bool) =
+        this |> LayerUtils.loadPatchHierarchy |> LayerUtils.getTriangles excludeNaN
+
