@@ -16,6 +16,8 @@ type PatchHierarchyStats = {
     CountInnerNodes : int
     CountVertices : int
     CountFaces : int
+    MinLevel : int
+    MaxLevel : int
     IndexedAttributes : Symbol[]
     SingleAttributes : Symbol[]
 }
@@ -60,14 +62,22 @@ module LayerUtils =
         let mutable countInnerNodes = 0
         let mutable countVertices = 0
         let mutable countFaces = 0
+        let mutable minLevel = System.Int32.MaxValue
+        let mutable maxLevel = System.Int32.MinValue
+
+        let updateLevel i =
+            if i < minLevel then minLevel <- i
+            if i > maxLevel then maxLevel <- i
 
         let opcPaths = patchHierarchy.opcPaths
         let rec traverse (n : QTree<Patch>) : unit =
             match n with
             | QTree.Node (n, xs) ->
+                updateLevel n.level
                 countInnerNodes <- countInnerNodes + 1
                 for x in xs do traverse x
             | QTree.Leaf n ->
+                updateLevel n.level
                 countLeafNodes <- countLeafNodes + 1
                 let ig, _ = Patch.load opcPaths  ViewerModality.XYZ n.info
                 countVertices <- countVertices + ig.VertexCount
@@ -84,42 +94,63 @@ module LayerUtils =
             CountInnerNodes = countInnerNodes
             CountVertices = countVertices
             CountFaces = countFaces
+            MinLevel = minLevel
+            MaxLevel = maxLevel
             IndexedAttributes = if ig.IndexedAttributes <> null then ig.IndexedAttributes.Keys |> Array.ofSeq else Array.empty
             SingleAttributes = if ig.SingleAttributes <> null then ig.SingleAttributes.Keys |> Array.ofSeq else Array.empty
         }
 
-    let printPatchInfo (info : LayerInfo) =
-        let root = loadPatchHierarchy info
-        let patch = match root.tree with | QTree.Node (n, _) -> n | QTree.Leaf n -> n
-        let ig, _ = Patch.load root.opcPaths ViewerModality.XYZ patch.info
+    //let printPatchInfo (info : LayerInfo) =
+    //    let root = loadPatchHierarchy info
+    //    let patch = match root.tree with | QTree.Node (n, _) -> n | QTree.Leaf n -> n
+    //    let ig, _ = Patch.load root.opcPaths ViewerModality.XYZ patch.info
       
-        let mutable totalLeafNodes  = 0
-        let mutable totalPoints = 0
-        let mutable totalFaces  = 0
-        for x in traverse root.tree false do
-            let ig, _ = Patch.load root.opcPaths ViewerModality.XYZ patch.info
-            let positions = 
-                match ig.IndexedAttributes[DefaultSemantic.Positions] with
-                | (:? array<V3f> as v) when not (isNull v) -> v
-                | _ -> failwith "[Queries] Patch has no V3f[] positions"
-            //printfn "%A %d %d" x.info.Name x.level positions.Length
-            totalLeafNodes <- totalLeafNodes + 1
-            totalPoints    <- totalPoints + positions.Length
-            totalFaces     <- totalFaces + ig.FaceCount
+    //    let mutable totalLeafNodes  = 0
+    //    let mutable totalPoints = 0
+    //    let mutable totalFaces  = 0
+    //    for x in traverse root.tree false do
+    //        let ig, _ = Patch.load root.opcPaths ViewerModality.XYZ patch.info
+    //        let positions = 
+    //            match ig.IndexedAttributes[DefaultSemantic.Positions] with
+    //            | (:? array<V3f> as v) when not (isNull v) -> v
+    //            | _ -> failwith "[Queries] Patch has no V3f[] positions"
+    //        //printfn "%A %d %d" x.info.Name x.level positions.Length
+    //        totalLeafNodes <- totalLeafNodes + 1
+    //        totalPoints    <- totalPoints + positions.Length
+    //        totalFaces     <- totalFaces + ig.FaceCount
              
-        if ig.IndexedAttributes <> null then
-            printfn "indexed attributes"
-            for a in ig.IndexedAttributes.Keys do printfn "    %A" a
-        if ig.SingleAttributes  <> null then
-            printfn "single attributes"
-            for a in ig.SingleAttributes.Keys do printfn "    %A" a
-        printfn "leaf nodes  %16d" totalLeafNodes
-        printfn "     points %16d" totalPoints
-        printfn "     faces  %16d" totalFaces
+    //    if ig.IndexedAttributes <> null then
+    //        printfn "indexed attributes"
+    //        for a in ig.IndexedAttributes.Keys do printfn "    %A" a
+    //    if ig.SingleAttributes  <> null then
+    //        printfn "single attributes"
+    //        for a in ig.SingleAttributes.Keys do printfn "    %A" a
+    //    printfn "leaf nodes  %16d" totalLeafNodes
+    //    printfn "     points %16d" totalPoints
+    //    printfn "     faces  %16d" totalFaces
+
+    let printLayerInfo (info : LayerInfo) =
+        printfn "%s" info.Path.FullName
+
+        let f (i : int) = i.ToString("N0")
+
+        let stats = info |> loadPatchHierarchy |> getPatchHierarchyStats
+        let countNodes = stats.CountInnerNodes + stats.CountLeafNodes
+        if stats.IndexedAttributes.Length > 0 then
+            let s = String.concat ", " (stats.IndexedAttributes |> Array.map(fun x -> x.ToString()))
+            printfn "    %s" s
+        if stats.SingleAttributes.Length > 0 then
+            let s = String.concat ", " (stats.SingleAttributes |> Array.map(fun x -> x.ToString()))
+            printfn "    %s" s
+
+        printfn "    %s nodes (%s leafs, %s inner, levels %d..%d)" (f(countNodes)) (f(stats.CountLeafNodes)) (f(stats.CountInnerNodes)) stats.MinLevel stats.MaxLevel
+        printfn "    vertices %12s" (f(stats.CountVertices))
+        printfn "    faces    %12s" (f(stats.CountFaces))
+
 
 
 type LayerInfo with
 
     member this.LoadPatchHierarchy () = LayerUtils.loadPatchHierarchy this
 
-    member this.PrintInfo () = LayerUtils.printPatchInfo this
+    //member this.PrintInfo () = LayerUtils.printPatchInfo this
