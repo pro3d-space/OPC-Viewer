@@ -34,20 +34,6 @@ module ListCommand =
 
         for info in layerInfos do
             printfn "%s" info.Path.FullName
-
-            if showDetails then
-                let f (i : int) = i.ToString("N0")
-
-                let stats = info |> LayerUtils.loadPatchHierarchy |> LayerUtils.getPatchHierarchyStats
-                let countNodes = stats.CountInnerNodes + stats.CountLeafNodes
-                if stats.IndexedAttributes.Length > 0 then
-                    let s = String.concat ", " (stats.IndexedAttributes |> Array.map(fun x -> x.ToString()))
-                    printfn "    %s" s
-                if stats.SingleAttributes.Length > 0 then
-                    let s = String.concat ", " (stats.SingleAttributes |> Array.map(fun x -> x.ToString()))
-                    printfn "    %s" s
-
-                printfn "    %12s nodes (%s leafs, %s inner)" (f(countNodes)) (f(stats.CountLeafNodes)) (f(stats.CountInnerNodes))
-                printfn "    %12s vertices %12s faces" (f(stats.CountVertices)) (f(stats.CountFaces))
+            if showDetails then LayerUtils.printLayerInfo info
 
         0
