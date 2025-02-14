@@ -24,10 +24,10 @@ module InfoCommand =
 
         // discover all layers in datadirs ...
         let layerInfos =
-            LayerUtils.searchLayerDir datadir
+            Utils.searchLayerDir datadir
             |> List.sortBy (fun x -> x.Path.FullName)
 
         for info in layerInfos do
-            LayerUtils.printLayerInfo info
+            Utils.printLayerInfo info
 
         0

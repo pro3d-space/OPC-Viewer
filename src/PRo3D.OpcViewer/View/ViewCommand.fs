@@ -32,13 +32,13 @@ module ViewCommand =
                 []
 
          // discover all layers in datadirs ...
-        let layerInfos = LayerUtils.searchLayerDirs datadirs
+        let layerInfos = Utils.searchLayerDirs datadirs
         
         // load patch hierarchies ...
         let patchHierarchies = 
             layerInfos
             |> Seq.toList 
-            |> List.map LayerUtils.loadPatchHierarchy
+            |> List.map Utils.loadPatchHierarchy
 
         // get root patch from each hierarchy
         let patches =
