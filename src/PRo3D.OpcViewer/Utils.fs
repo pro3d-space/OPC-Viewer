@@ -5,6 +5,7 @@ open Aardvark.Data.Opc
 open Aardvark.Rendering
 open MBrace.FsPickler
 open System.IO
+open System.Runtime.CompilerServices
 
 type LayerInfo = {
     Path: DirectoryInfo
@@ -22,7 +23,52 @@ type PatchHierarchyStats = {
     SingleAttributes : Symbol[]
 }
 
-module LayerUtils =
+[<Extension>]
+type Box3dExtensions() =
+
+    [<Extension>]
+    static member SplitX(b : Box3d, x : double) : Box3d * Box3d =
+        let a = Box3d(b.Min, V3d(x, b.Max.Y, b.Max.Z))
+        let b = Box3d(V3d(x, b.Min.Y, b.Min.Z), b.Max)
+        (a, b)
+
+    [<Extension>]
+    static member SplitX(b : Box3d) : Box3d * Box3d =
+        b.SplitX(b.Center.X)
+
+    [<Extension>]
+    static member SplitY(b : Box3d, y : double) : Box3d * Box3d =
+        let a = Box3d(b.Min, V3d(b.Max.X, y, b.Max.Z))
+        let b = Box3d(V3d(b.Min.X, y, b.Min.Z), b.Max)
+        (a, b)
+        
+    [<Extension>]
+    static member SplitY(b : Box3d) : Box3d * Box3d =
+        b.SplitY(b.Center.Y)
+
+    [<Extension>]
+    static member SplitZ(b : Box3d, z : double) : Box3d * Box3d =
+        let a = Box3d(b.Min, V3d(b.Max.X, b.Max.Y, z))
+        let b = Box3d(V3d(b.Min.X, b.Min.Y, z), b.Max)
+        (a, b)
+
+    [<Extension>]
+    static member SplitZ(b : Box3d) : Box3d * Box3d =
+        b.SplitZ(b.Center.Z)
+
+    [<Extension>]
+    static member SplitDim(b : Box3d, dim : int) : Box3d * Box3d =
+        match dim with
+        | 0 -> b.SplitX()
+        | 1 -> b.SplitY()
+        | 2 -> b.SplitZ()
+        | _ -> sprintf "Invalid dimension %d." dim |> failwith
+
+    [<Extension>]
+    static member SplitMajorDimension(b : Box3d) : Box3d * Box3d =
+        b.SplitDim(b.MajorDim)
+
+module Utils =
 
     let private (+/) path1 path2 = Path.Combine(path1, path2)
     let private serializer = FsPickler.CreateBinarySerializer()
@@ -124,6 +170,10 @@ module LayerUtils =
         let sky = gbb.Center.Normalized
         sky
 
+    /// Gets root patch of given patch hierarchy.
+    let getRootPatch (patchHierarchy : PatchHierarchy) : Patch =
+        match patchHierarchy.tree with | QTree.Node (n, _) -> n | QTree.Leaf n -> n
+
     /// Prints a short summary of given LayerInfo.
     /// E.g. attributes and various counts for nodes, vertices and faces.
     let printLayerInfo (info : LayerInfo) : unit =
@@ -208,11 +258,11 @@ module LayerUtils =
 type LayerInfo with
 
     member this.LoadPatchHierarchy () =
-        this |> LayerUtils.loadPatchHierarchy
+        this |> Utils.loadPatchHierarchy
 
     member this.GetPoints (excludeNaN : bool) =
-        this |> LayerUtils.loadPatchHierarchy |> LayerUtils.getPoints excludeNaN
+        this |> Utils.loadPatchHierarchy |> Utils.getPoints excludeNaN
 
     member this.GetTriangles (excludeNaN : bool) =
-        this |> LayerUtils.loadPatchHierarchy |> LayerUtils.getTriangles excludeNaN
+        this |> Utils.loadPatchHierarchy |> Utils.getTriangles excludeNaN
 

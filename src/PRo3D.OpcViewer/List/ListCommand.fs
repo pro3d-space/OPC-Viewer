@@ -29,11 +29,11 @@ module ListCommand =
 
         // discover all layers in datadirs ...
         let layerInfos =
-            LayerUtils.searchLayerDirs datadirs
+            Utils.searchLayerDirs datadirs
             |> List.sortBy (fun x -> x.Path.FullName)
 
         for info in layerInfos do
             printfn "%s" info.Path.FullName
-            if showDetails then LayerUtils.printLayerInfo info
+            if showDetails then Utils.printLayerInfo info
 
         0

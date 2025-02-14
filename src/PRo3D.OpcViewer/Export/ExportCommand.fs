@@ -29,7 +29,7 @@ module ExportCommand =
 
         // discover all layers in datadirs ...
         let layers =
-            LayerUtils.searchLayerDir datadir
+            Utils.searchLayerDir datadir
             |> List.sortBy (fun x -> x.Path.FullName)
 
         let ensureExtension (ext : string) (path : string) : string =
