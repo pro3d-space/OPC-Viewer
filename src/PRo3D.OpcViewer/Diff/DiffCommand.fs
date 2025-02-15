@@ -5,15 +5,18 @@ open Aardvark.Base
 open System.Diagnostics
 
 type TriangleTree =
-    | Inner of leftBox: Box3d * rightBox: Box3d * left: TriangleTree * right: TriangleTree
-    | Leaf of triangles: Triangle3d list
+    | Inner of boundsLeft  : Box3d * boundsRight : Box3d * left : TriangleTree * right : TriangleTree
+    | Leaf of triangles : Triangle3d[]
 
 module TriangleTree =
 
-    let private getBoundingBoxOfTriangles (triangles : Triangle3d list) : Box3d =
-        Box3d(triangles |> List.collect (fun x -> [ x.P0; x.P1; x.P2 ]))
+    let private getBoundingBoxOfTriangles (triangles : Triangle3d[]) : Box3d =
+        let bb = Box3d.Invalid
+        let ps = triangles.AsCastSpan<Triangle3d, V3d>()
+        for i in 0 .. ps.Length-1 do bb.ExtendBy(ps[i])
+        bb
 
-    let rec build (triangles : Triangle3d list) : TriangleTree =
+    let rec private build' (triangles : Triangle3d[]) (bb : Box3d) : TriangleTree =
         let count = triangles.Length
 
         if count < 32 then
@@ -22,25 +25,26 @@ module TriangleTree =
 
         else
 
-            let bb = getBoundingBoxOfTriangles triangles
+            //let bb = getBoundingBoxOfTriangles triangles
             let (lbb, rbb) = bb.SplitMajorDimension()
-            let lts = triangles |> List.filter(lbb.Intersects) // triangles intersecting left box
-            let rts = triangles |> List.filter(rbb.Intersects) // triangles intersecting right box
+            let lts = triangles |> Array.filter(lbb.Intersects) // triangles intersecting left box
+            let rts = triangles |> Array.filter(rbb.Intersects) // triangles intersecting right box
 
             if (lts.Length < count || rts.Length < count) then
 
                 let lbb = getBoundingBoxOfTriangles lts
                 let rbb = getBoundingBoxOfTriangles rts
+
                 let l =
                     if lts.Length < count then
-                        build lts 
+                        build' lts lbb
                     else
                         if count > 128 then printfn "L %d" lts.Length
                         Leaf(lts)
 
                 let r =
                     if rts.Length < count then
-                        build rts
+                        build' rts rbb
                     else
                        if count > 128 then printfn "R %d" rts.Length
                        Leaf(rts)
@@ -50,6 +54,9 @@ module TriangleTree =
             else
                 if count > 128 then printfn "  %d" count
                 Leaf(triangles)
+
+    let rec build (triangles : Triangle3d[]) : TriangleTree =
+        build' triangles (getBoundingBoxOfTriangles triangles)
 
     /// Returns absolute dist and t for nearest hit on ray (with respect to ray.Origin).
     let rec getNearestIntersection (tree : TriangleTree) (ray : Ray3d) : (float * float) option =
@@ -160,9 +167,10 @@ module DiffCommand =
         let sky = Utils.getSky hierarchyMain
 
         let trianglesOtherWithNaN = Utils.getTriangles false hierarchyOther
-        let trianglesOther = trianglesOtherWithNaN |> List.filter Utils.isValidTriangle
+        let trianglesOther = trianglesOtherWithNaN |> List.filter Utils.isValidTriangle |> Array.ofList
 
         let sw = Stopwatch.StartNew()
+        //let bb = (Utils.getRootPatch hierarchyOther).info.GlobalBoundingBox
         let triangleTreeOther = TriangleTree.build trianglesOther
         sw.Stop()
         printfn "building tree ......... %A" sw.Elapsed
@@ -193,39 +201,5 @@ module DiffCommand =
 
         printfn "%d hits / %d points" countHits pointsMain.Length 
 
-        //do
-        //    let nodes = Utils.traverse hierarchyOther.tree false
-        //    for node in nodes do
-
-        //        let ig, _ = Patch.load hierarchyOther.opcPaths ViewerModality.XYZ node.info
-
-        //        let l2g = node.info.Local2Global
-        //        let tp (p : V3f) : V3d = l2g.TransformPos (V3d(p))
-
-        //        let ps =
-        //            match ig.IndexedAttributes[DefaultSemantic.Positions] with
-        //            | (:? array<V3f> as v) when not (isNull v) -> v
-        //            | _ -> failwith ""
-
-        //        let ps = ps |> Array.filter (fun p -> not p.IsNaN)
-
-        //        for pLocal in ps do
-        //            let p = tp pLocal
-        //            let mutable isValid = false
-        //            let mutable nearestAbs = infinity
-        //            let mutable nearest = 0.0
-        //            let ray = Ray3d(p, sky)
-        //            for t in trianglesMain do
-        //                let (isHit, dist) = t.Intersects(ray)
-        //                if isHit then
-        //                    isValid <- true
-        //                    let distAbs = System.Math.Abs(dist)
-        //                    if distAbs < nearestAbs then
-        //                        nearestAbs <-distAbs
-        //                        nearest <- dist
-
-        //            if isValid then
-        //                printfn "%-64s %A" (sprintf "%A" p) nearest
-            
 
         0
