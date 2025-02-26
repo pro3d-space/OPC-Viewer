@@ -3,6 +3,7 @@
 open Argu
 open Aardvark.Base
 open System.Diagnostics
+open System.IO
 
 type TriangleTree =
     | Inner of boundsLeft  : Box3d * boundsRight : Box3d * left : TriangleTree * right : TriangleTree
@@ -165,6 +166,8 @@ module DiffCommand =
         let hierarchyOther = layerOther.LoadPatchHierarchy ()
 
         let sky = Utils.getSky hierarchyMain
+        let ground = Plane3d(sky, V3d.Zero)
+        let w2p = ground.GetWorldToPlane()
 
         let trianglesOtherWithNaN = Utils.getTriangles false hierarchyOther
         let trianglesOther = trianglesOtherWithNaN |> List.filter Utils.isValidTriangle |> Array.ofList
@@ -180,6 +183,9 @@ module DiffCommand =
         let mutable countHits = 0
         
         sw.Restart()
+        let rangeDist = Range1d.Invalid
+        let rangeT = Range1d.Invalid
+        let mutable qs = List.empty<(V3d*float)>
         for p in pointsMain do
 
             let ray = Ray3d(p, sky)
@@ -190,8 +196,17 @@ module DiffCommand =
             match x with
             | Some (dist, t) ->
                 countHits <- countHits + 1
+                let g = ray.Intersect(ground)
+                let p = g + sky * t
+                let p' = w2p.TransformPos p
+                
+
+                qs <- (p',t) :: qs
+                rangeDist.ExtendBy(dist)
+                rangeT.ExtendBy(t)
                 //if i % 1000 = 0 then
                 //    printfn "[%10d/%d][%d hits] hit dist %16.3f %16.3f" i pointsMain.Length countHits dist t
+                ()
             | None ->
                 //if i % 1000 = 0 then
                 //    printfn "[%10d/%d][%d hits] no hit" i pointsMain.Length countHits
@@ -199,7 +214,28 @@ module DiffCommand =
         sw.Stop()
         printfn "computing distances ... %A" sw.Elapsed
 
-        printfn "%d hits / %d points" countHits pointsMain.Length 
+        printfn "%d hits / %d points" countHits pointsMain.Length
+        printfn "range dist: %A" rangeDist
+        printfn "range T   : %A" rangeT
 
+        do
+            let outfile = @"E:\qs.pts"
+
+            let max = max (abs rangeT.Min) (abs rangeT.Max)
+
+            use f = new StreamWriter(outfile)
+            for (p,t) in qs do
+                let w = float32(t / max)
+                let c =
+                    if w < 0.0f then
+                        let w = -w
+                        C3b(C3f.Blue * w + C3f.Green * (1.0f - w))
+                    else
+                        C3b(C3f.Red * w + C3f.Green * (1.0f - w))
+                sprintf "%f %f %f %i %i %i" p.X p.Y p.Z c.R c.G c.B |> f.WriteLine
+
+            printfn "exported diff point cloud to %s" outfile
+
+            ()
 
         0

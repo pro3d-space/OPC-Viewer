@@ -1,8 +1,23 @@
 ﻿open Argu
 open PRo3D.OpcViewer
+open Aardvark.Base
+open System.Text.Json;
 
 [<EntryPoint>]
 let main argv =
+
+    //let options = JsonSerializerOptions()
+    //options.WriteIndented <- true
+    //options.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
+
+    //let x = Affine3d.Identity
+    //let s = JsonSerializer.Serialize(x, options)
+    //printfn "%s" s
+
+    //let y = JsonSerializer.Deserialize<Affine3d>(s, options)
+    //printfn "deserialized: %A" y
+
+    //exit 0
 
     let PROGRAM_NAME = "PRo3D.OpcViewer"
     let VERSION      = "0.0.1"
