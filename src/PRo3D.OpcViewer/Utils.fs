@@ -217,7 +217,7 @@ module Utils =
       
     /// Returns all triangles of given patch.
     /// Coordinates are in world space.
-    let getTrianglesPatch (excludeNaN : bool) (hierarchy : PatchHierarchy) (node : Patch) : Triangle3d list =
+    let getTrianglesPatch (excludeNaN : bool) (hierarchy : PatchHierarchy) (node : Patch) : Triangle3d[] =
         
         let ig, _ = Patch.load hierarchy.opcPaths ViewerModality.XYZ node.info
 
@@ -236,16 +236,20 @@ module Utils =
 
         let l2g = node.info.Local2Global
         let tp (p : V3f) : V3d = l2g.TransformPos (V3d(p))
-        let transform (t : Triangle3f) : Triangle3d = Triangle3d(tp t.P0, tp t.P1, tp t.P2)
+        //let transform (t : Triangle3f) : Triangle3d = Triangle3d(tp t.P0, tp t.P1, tp t.P2)
 
-        let triangles = seq {
-            for i in 0 .. 3 ..  ia.Length - 3 do
-                let t = Triangle3f(ps[ia[i]], ps[ia[i + 1]], ps[ia[i + 2]]) // local space
-                if not (excludeNaN && (isInvalidTriangleF t)) then
-                    yield transform t
-        }
+        let mutable triangles = Array.zeroCreate<Triangle3d> (ia.Length / 3)
+        let mutable j = 0
+        for i in 0 .. triangles.Length-1 do
+            triangles[i].P0 <- tp ps[ia[j]]; j <- j + 1
+            triangles[i].P1 <- tp ps[ia[j]]; j <- j + 1
+            triangles[i].P2 <- tp ps[ia[j]]; j <- j + 1
+            ()
 
-        triangles |> List.ofSeq
+        if excludeNaN then
+            triangles <- triangles |> Array.filter isValidTriangle
+
+        triangles
 
     /// Returns all triangles of the PatchHierarchy's most detailed level.
     /// Coordinates are in world space.
