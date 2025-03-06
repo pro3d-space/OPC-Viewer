@@ -229,12 +229,19 @@ module DiffCommand =
                 let c =
                     if w < 0.0f then
                         let w = -w
-                        C3b(C3f.Blue * w + C3f.Green * (1.0f - w))
+                        C3b(C3f.Blue * w + C3f.White * (1.0f - w))
                     else
-                        C3b(C3f.Red * w + C3f.Green * (1.0f - w))
+                        C3b(C3f.Red * w + C3f.White * (1.0f - w))
                 sprintf "%f %f %f %i %i %i" p.X p.Y p.Z c.R c.G c.B |> f.WriteLine
 
             printfn "exported diff point cloud to %s" outfile
+
+            use fHisto = new StreamWriter(outfile + ".csv")
+            let histo = qs |> Seq.groupBy (fun (_,t) -> int(t*1000.0)) |> Seq.map (fun (key, xs) -> (key, xs |> Seq.length)) |> Seq.sortBy (fun (k,_) -> k) |> Seq.toList
+            for (k,count) in histo do
+                let line = sprintf "%i,%i" k count
+                printfn "%s" line
+                fHisto.WriteLine line
 
             ()
 
