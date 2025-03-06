@@ -47,6 +47,17 @@ module Shader =
             }
         }
 
+    type VertexWithDistance = 
+        {
+            [<Position>] pos : V4d
+            [<Semantic(OpcRendering.DefaultSemantic.Distances)>] distance : V3d
+        }
+
+    let showDistances (v : VertexWithDistance) = 
+        fragment {
+            return V4d(v.distance, 1.0)
+        }
+
 
 module OpcViewer = 
     
@@ -110,6 +121,7 @@ module OpcViewer =
                     DefaultSurfaces.constantColor C4f.White |> toEffect
                     DefaultSurfaces.diffuseTexture |> toEffect
                     Shader.LoDColor |> toEffect
+                    Shader.showDistances |> toEffect
                ]
             |> Sg.uniform "LodVisEnabled" lodVisEnabled
             |> Sg.fillMode fillMode
