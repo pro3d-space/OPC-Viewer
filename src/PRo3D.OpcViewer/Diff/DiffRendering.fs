@@ -1,14 +1,15 @@
 ﻿namespace Aardvark.Opc
 
 open Aardvark.Base
-open Aardvark.Rendering
 open Aardvark.Data.Opc
 open Aardvark.GeoSpatial.Opc
 open Aardvark.GeoSpatial.Opc.Load
 open Aardvark.GeoSpatial.Opc.PatchLod
+open Aardvark.Rendering
 open FSharp.Data.Adaptive 
 
-module OpcRendering =
+
+module DiffRendering =
 
     let createSceneGraphSimple (signature : IFramebufferSignature) (uploadThreadpool : Load.Runner) (basePath : string) (h : PatchHierarchy) =
         let t = PatchLod.toRoseTree h.tree
@@ -27,7 +28,7 @@ module OpcRendering =
         let Distances = "Distances"
         let DistancesSym = Sym.ofString Distances
 
-    let createSceneGraphCustom  (signature : IFramebufferSignature) (uploadThreadpool : Load.Runner) (basePath : string) (h : PatchHierarchy) =
+    let createSceneGraphCustom  (signature : IFramebufferSignature) (uploadThreadpool : Load.Runner) (basePath : string) (h : PatchHierarchy) (getColor : V3d -> C3b) =
            
         // use this anonymous scope extraction for patchNodes for potentially expensive computations, needed later in the getter functions
         let context (n : PatchNode) (s : Ag.Scope) =
@@ -47,10 +48,44 @@ module OpcRendering =
             // add textures here (set of textures is fixed), an example is here: https://github.com/aardvark-platform/aardvark.geospatial/blob/40bbfcd2a886043ec366dbc39ee057b80db17d3d/src/Aardvark.GeoSpatial.Opc/MultiTexturing.fs#L37
             Map.empty
                 
+        let distanceComputationEnabled : aval<bool> = cval true
+
+        let rnd = new RandomSystem()
+        let computeDistancesForPatch (paths : OpcPaths) (patch : RenderPatch) =
+            let buffer : aval<IBuffer> = 
+                distanceComputationEnabled 
+                |> AVal.map (fun enabled -> 
+                    if enabled then
+                        let (g, elapsedIndex), createTime = 
+                            timed (fun () -> 
+                                Patch.load paths patch.modality patch.info
+                            )
+                        let idx = g.IndexArray |> unbox<int[]>
+                        let positions = g.IndexedAttributes[DefaultSemantic.Positions] |> unbox<V3f[]>
+                        let distances = 
+                            idx |> Array.map (fun idx -> 
+                                let pLocal = positions[idx]
+                                let c =
+                                    match pLocal.IsNaN with
+                                    | true -> C3b.Yellow
+                                    | false -> let p = V3d(pLocal) |> patch.info.Local2Global.TransformPos
+                                               getColor p
+                                
+                                V3f(C3f.FromC3b(c))
+                                //rnd.UniformV3f()
+                            )
+                        ArrayBuffer(distances)
+                    else
+                        failwith "dont know"
+                )
+            BufferView(buffer, typeof<V3f>)
+
         let getVertexAttributes (paths : OpcPaths) (scope : obj) (patch : RenderPatch) : Map<Symbol, BufferView> =
             let scope = scope :?> PatchScope
-            // add textures here (set of textures is fixed), an example is here: https://github.com/aardvark-platform/aardvark.geospatial/blob/40bbfcd2a886043ec366dbc39ee057b80db17d3d/src/Aardvark.GeoSpatial.Opc/MultiTexturing.fs#L55
-            Map.empty
+            let vertexData = patch.info.Positions
+            Map.ofList [
+                DefaultSemantic.DistancesSym, computeDistancesForPatch paths patch   
+            ]
 
         PatchNode(
             signature, 

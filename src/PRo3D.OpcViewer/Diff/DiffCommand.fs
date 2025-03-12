@@ -2,8 +2,11 @@
 
 open Argu
 open Aardvark.Base
+open Aardvark.GeoSpatial.Opc
+open System.Collections.Generic
 open System.Diagnostics
 open System.IO
+open Aardvark.Opc
 
 type TriangleTree =
     | Inner of boundsLeft  : Box3d * boundsRight : Box3d * left : TriangleTree * right : TriangleTree
@@ -107,6 +110,7 @@ module DiffCommand =
         | [<Mandatory                   >] Main    of dir: string
         | [<Mandatory                   >] Other   of dirs : string list
         | [<Unique                      >] NoValue of float
+        | [<Unique                      >] Speed   of float
         | [<Unique;AltCommandLine("-v") >] Verbose
 
         interface IArgParserTemplate with
@@ -115,6 +119,7 @@ module DiffCommand =
                 | Main    _ -> "directory containing the single main layer."
                 | Other   _ -> "one or more directories containing layers to compare to the main layer."
                 | NoValue _ -> "value used if no difference can be computed. Optional. Default is nan."
+                | Speed   _ -> "optional camera controller speed"
                 | Verbose   -> "print more detailed info."
 
     let run (args : ParseResults<Args>) : int =
@@ -179,16 +184,17 @@ module DiffCommand =
         printfn "building tree ......... %A" sw.Elapsed
 
         let pointsMain = Utils.getPoints true hierarchyMain
+        let gbb = Box3d(pointsMain)
         let mutable i = 0
         let mutable countHits = 0
         
         sw.Restart()
         let rangeDist = Range1d.Invalid
         let rangeT = Range1d.Invalid
-        let mutable qs = List.empty<(V3d*float)>
-        for p in pointsMain do
+        let mutable qs = List.empty<(V3d*V3d*float)>
+        for pGlobal in pointsMain do
 
-            let ray = Ray3d(p, sky)
+            let ray = Ray3d(pGlobal, sky)
             let x = TriangleTree.getNearestIntersection triangleTreeOther ray
             
             i <- i + 1
@@ -201,7 +207,7 @@ module DiffCommand =
                 let p' = w2p.TransformPos p
                 
 
-                qs <- (p',t) :: qs
+                qs <- (pGlobal, p', t) :: qs
                 rangeDist.ExtendBy(dist)
                 rangeT.ExtendBy(t)
                 //if i % 1000 = 0 then
@@ -218,13 +224,15 @@ module DiffCommand =
         printfn "range dist: %A" rangeDist
         printfn "range T   : %A" rangeT
 
+        let p2c = Dictionary<V3d,C3b>()
+
         do
             let outfile = @"E:\qs.pts"
 
             let max = max (abs rangeT.Min) (abs rangeT.Max)
 
             use f = new StreamWriter(outfile)
-            for (p,t) in qs do
+            for (pGlobal,p,t) in qs do
                 let w = float32(t / max)
                 let c =
                     if w < 0.0f then
@@ -232,12 +240,15 @@ module DiffCommand =
                         C3b(C3f.Blue * w + C3f.White * (1.0f - w))
                     else
                         C3b(C3f.Red * w + C3f.White * (1.0f - w))
+
+                p2c[pGlobal] <- c
+
                 sprintf "%f %f %f %i %i %i" p.X p.Y p.Z c.R c.G c.B |> f.WriteLine
 
             printfn "exported diff point cloud to %s" outfile
 
             use fHisto = new StreamWriter(outfile + ".csv")
-            let histo = qs |> Seq.groupBy (fun (_,t) -> int(t*1000.0)) |> Seq.map (fun (key, xs) -> (key, xs |> Seq.length)) |> Seq.sortBy (fun (k,_) -> k) |> Seq.toList
+            let histo = qs |> Seq.groupBy (fun (_,_,t) -> int(t*1000.0)) |> Seq.map (fun (key, xs) -> (key, xs |> Seq.length)) |> Seq.sortBy (fun (k,_) -> k) |> Seq.toList
             for (k,count) in histo do
                 let line = sprintf "%i,%i" k count
                 printfn "%s" line
@@ -245,4 +256,48 @@ module DiffCommand =
 
             ()
 
-        0
+        // create OpcScene ...
+        let initialCam = Utils.createInitialCameraView gbb
+        let speed = args.GetResult(Speed, defaultValue = initialCam.Far / 64.0)
+        let scene =
+            { 
+                useCompressedTextures = true
+                preTransform     = Trafo3d.Identity
+                patchHierarchies = Seq.delay (fun _ -> [layerMain] |> Seq.map (fun info -> info.Path.FullName))
+                boundingBox      = gbb
+                near             = initialCam.Near
+                far              = initialCam.Far
+                speed            = speed
+                lodDecider       = DefaultMetrics.mars2 
+            }
+
+        // ... and show it
+        
+        let max = max (abs rangeT.Min) (abs rangeT.Max)
+        let computeColor (p : V3d) : C3b =
+
+            match p2c.TryGetValue(p) with
+            | (true, c) -> 
+                //printfn "haha %A" c
+                c
+            | (false, _) ->
+
+                let ray = Ray3d(p, sky)
+                let x = TriangleTree.getNearestIntersection triangleTreeOther ray
+                match x with
+                | Some (dist, t) ->
+                    //printfn "%A" t
+                    let w = float32(t / max)
+                    let c =
+                        if w < 0.0f then
+                            let w = -w
+                            C3b(C3f.Blue * w + C3f.White * (1.0f - w))
+                        else
+                            C3b(C3f.Red * w + C3f.White * (1.0f - w))
+                    c
+                | None ->
+                    C3b.GreenYellow
+
+        DiffViewer.run scene initialCam.CameraView computeColor
+
+        //0
