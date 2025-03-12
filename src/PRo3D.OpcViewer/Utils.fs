@@ -23,6 +23,12 @@ type PatchHierarchyStats = {
     SingleAttributes : Symbol[]
 }
 
+type CameraViewAndNearFar = {
+    CameraView : CameraView
+    Near : float
+    Far : float
+}
+
 [<Extension>]
 type Box3dExtensions() =
 
@@ -257,6 +263,25 @@ module Utils =
         traverse hierarchy.tree false 
         |> Seq.collect (getTrianglesPatch excludeNaN hierarchy)
         |> List.ofSeq
+
+    let createInitialCameraView (gbb : Box3d) : CameraViewAndNearFar =
+        let globalSky = gbb.Center.Normalized
+        let plane = Plane3d(globalSky, 0.0)
+        let plane2global pos = gbb.Center + plane.GetPlaneSpaceTransform().TransformPos(pos)
+
+        let d = gbb.Size.Length
+        let localLocation = V3d(d * 0.1, d * 0.05, d * 0.25)
+        let localLookAt   = V3d.Zero
+
+        let globalLocation = plane2global localLocation
+        let globalLookAt   = plane2global localLookAt
+
+        let cam = CameraView.lookAt globalLocation globalLookAt globalSky
+
+        let far = d * 1.5
+        let near = far / 1024.0
+
+        { CameraView = cam; Near = near;  Far = far }
 
 
 type LayerInfo with

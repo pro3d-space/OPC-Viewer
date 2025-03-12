@@ -48,41 +48,22 @@ module ViewCommand =
          // global bounding box over all patches
         let gbb = patches |> Seq.map (fun patch -> patch.info.GlobalBoundingBox) |> Box3d
 
-        let createInitialCameraView (gbb : Box3d) =
-            let globalSky = gbb.Center.Normalized
-            let plane = Plane3d(globalSky, 0.0)
-            let plane2global pos = gbb.Center + plane.GetPlaneSpaceTransform().TransformPos(pos)
-
-            let d = gbb.Size.Length
-            let localLocation = V3d(d * 0.1, d * 0.05, d * 0.25)
-            let localLookAt   = V3d.Zero
-
-            let globalLocation = plane2global localLocation
-            let globalLookAt   = plane2global localLookAt
-
-            let cam = CameraView.lookAt globalLocation globalLookAt globalSky
-
-            let far = d * 1.5
-            let near = far / 1024.0
-
-            (cam, near, far)
-
         // create OpcScene ...
-        let (initialCam, near, far) = createInitialCameraView gbb
-        let speed = args.GetResult(Speed, defaultValue = far / 64.0)
+        let initialCam = Utils.createInitialCameraView gbb
+        let speed = args.GetResult(Speed, defaultValue = initialCam.Far / 64.0)
         let scene =
             { 
                 useCompressedTextures = true
                 preTransform     = Trafo3d.Identity
                 patchHierarchies = Seq.delay (fun _ -> layerInfos |> Seq.map (fun info -> info.Path.FullName))
                 boundingBox      = gbb
-                near             = near
-                far              = far
+                near             = initialCam.Near
+                far              = initialCam.Far
                 speed            = speed
                 lodDecider       = DefaultMetrics.mars2 
             }
 
         // ... and show it
         
-        OpcViewer.run scene initialCam
+        OpcViewer.run scene initialCam.CameraView
         

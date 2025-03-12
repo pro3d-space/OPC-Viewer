@@ -5,16 +5,15 @@ open Aardvark.Application.Slim
 open Aardvark.Base
 open Aardvark.Data.Opc
 open Aardvark.GeoSpatial.Opc
+open Aardvark.GeoSpatial.Opc.Load
 open Aardvark.Rendering
 open Aardvark.SceneGraph
 
 open FSharp.Data.Adaptive 
 open MBrace.FsPickler
 
-open Aardvark.GeoSpatial.Opc.Load
-
 [<AutoOpen>]
-module Shader =
+module DiffShader =
 
     open Aardvark.Rendering.Effects
     
@@ -48,7 +47,7 @@ module Shader =
     type VertexWithDistance = 
         {
             [<Position>] pos : V4d
-            [<Semantic(OpcRendering.DefaultSemantic.Distances)>] distance : V3d
+            [<Semantic(DiffRendering.DefaultSemantic.Distances)>] distance : V3d
         }
 
     let showDistances (v : VertexWithDistance) = 
@@ -57,10 +56,9 @@ module Shader =
         }
 
 
-module OpcViewer = 
+module DiffViewer = 
     
-
-    let run (scene : OpcScene) (initialCameraView : CameraView) =
+    let run (scene : OpcScene) (initialCameraView : CameraView) (getColor : V3d -> C3b) =
 
         Aardvark.Init()
 
@@ -76,7 +74,7 @@ module OpcViewer =
         let hierarchies = 
             scene.patchHierarchies |> Seq.toList |> List.map (fun basePath -> 
                 let h = PatchHierarchy.load serializer.Pickle serializer.UnPickle (OpcPaths.OpcPaths basePath)
-                OpcRendering.createSceneGraphCustom win.FramebufferSignature runner basePath h
+                DiffRendering.createSceneGraphCustom win.FramebufferSignature runner basePath h getColor
             )
 
         let speed = AVal.init scene.speed
@@ -115,10 +113,11 @@ module OpcViewer =
             |> Sg.viewTrafo (view |> AVal.map CameraView.viewTrafo)
             |> Sg.projTrafo (frustum |> AVal.map Frustum.projTrafo)
             |> Sg.effect [
-                    Shader.stableTrafo |> toEffect
+                    DiffShader.stableTrafo |> toEffect
                     DefaultSurfaces.constantColor C4f.White |> toEffect
                     DefaultSurfaces.diffuseTexture |> toEffect
-                    Shader.LoDColor |> toEffect
+                    DiffShader.LoDColor |> toEffect
+                    DiffShader.showDistances |> toEffect
                ]
             |> Sg.uniform "LodVisEnabled" lodVisEnabled
             |> Sg.fillMode fillMode
