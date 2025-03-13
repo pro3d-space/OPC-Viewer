@@ -7,7 +7,7 @@ open Aardvark.GeoSpatial.Opc.Load
 open Aardvark.GeoSpatial.Opc.PatchLod
 open Aardvark.Rendering
 open FSharp.Data.Adaptive 
-
+open PRo3D.OpcViewer
 
 module DiffRendering =
 
@@ -28,7 +28,7 @@ module DiffRendering =
         let Distances = "Distances"
         let DistancesSym = Sym.ofString Distances
 
-    let createSceneGraphCustom  (signature : IFramebufferSignature) (uploadThreadpool : Load.Runner) (basePath : string) (h : PatchHierarchy) (getColor : V3d -> C3b) =
+    let createSceneGraphCustom  (signature : IFramebufferSignature) (uploadThreadpool : Load.Runner) (basePath : string) (h : PatchHierarchy) (mode : aval<DistanceComputationMode>) (getColor : ComputeDistance) =
            
         // use this anonymous scope extraction for patchNodes for potentially expensive computations, needed later in the getter functions
         let context (n : PatchNode) (s : Ag.Scope) =
@@ -53,23 +53,23 @@ module DiffRendering =
         let rnd = new RandomSystem()
         let computeDistancesForPatch (paths : OpcPaths) (patch : RenderPatch) =
             let buffer : aval<IBuffer> = 
-                distanceComputationEnabled 
-                |> AVal.map (fun enabled -> 
+                (distanceComputationEnabled, mode) 
+                ||> AVal.map2 (fun enabled mode -> 
                     if enabled then
                         let (g, elapsedIndex), createTime = 
                             timed (fun () -> 
                                 Patch.load paths patch.modality patch.info
                             )
-                        let idx = g.IndexArray |> unbox<int[]>
+                        //let idx = g.IndexArray |> unbox<int[]>
                         let positions = g.IndexedAttributes[DefaultSemantic.Positions] |> unbox<V3f[]>
                         let distances = 
-                            idx |> Array.map (fun idx -> 
-                                let pLocal = positions[idx]
+                            positions |> Array.map (fun pLocal -> 
+                                //let pLocal = positions[idx]
                                 let c =
                                     match pLocal.IsNaN with
                                     | true -> C3b.Yellow
                                     | false -> let p = V3d(pLocal) |> patch.info.Local2Global.TransformPos
-                                               getColor p
+                                               getColor mode p
                                 
                                 V3f(C3f.FromC3b(c))
                                 //rnd.UniformV3f()
@@ -91,7 +91,7 @@ module DiffRendering =
             signature, 
             uploadThreadpool, 
             h.opcPaths.Opc_DirAbsPath, 
-            DefaultMetrics.mars2 , 
+            DefaultMetrics.mars2, 
             false, 
             true, 
             ViewerModality.XYZ, 

@@ -7,6 +7,13 @@ open MBrace.FsPickler
 open System.IO
 open System.Runtime.CompilerServices
 
+type DistanceComputationMode = 
+    | Sky
+    | Nearest
+
+
+type ComputeDistance = DistanceComputationMode -> V3d -> C3b
+    
 type LayerInfo = {
     Path: DirectoryInfo
     PatchHierarchyFile: FileInfo
