@@ -274,29 +274,32 @@ module DiffCommand =
         // ... and show it
         
         let max = max (abs rangeT.Min) (abs rangeT.Max)
-        let computeColor (p : V3d) : C3b =
+        let computeColor (mode : DistanceComputationMode) (p : V3d) : C3b =
 
-            match p2c.TryGetValue(p) with
-            | (true, c) -> 
-                //printfn "haha %A" c
-                c
-            | (false, _) ->
-
-                let ray = Ray3d(p, sky)
-                let x = TriangleTree.getNearestIntersection triangleTreeOther ray
-                match x with
-                | Some (dist, t) ->
-                    //printfn "%A" t
-                    let w = float32(t / max)
-                    let c =
-                        if w < 0.0f then
-                            let w = -w
-                            C3b(C3f.Blue * w + C3f.White * (1.0f - w))
-                        else
-                            C3b(C3f.Red * w + C3f.White * (1.0f - w))
+            match mode with
+            | DistanceComputationMode.Nearest -> C3b.Red
+            | _ -> 
+                match (false, C3b.White) (*p2c.TryGetValue(p)*) with
+                | (true, c) when false -> 
+                    //printfn "haha %A" c
                     c
-                | None ->
-                    C3b.GreenYellow
+                | _ ->
+
+                    let ray = Ray3d(p, sky)
+                    let x = TriangleTree.getNearestIntersection triangleTreeOther ray
+                    match x with
+                    | Some (dist, t) ->
+                        //printfn "%A" t
+                        let w = float32(t / max)
+                        let c =
+                            if w < 0.0f then
+                                let w = -w
+                                C3b(C3f.Blue * w + C3f.White * (1.0f - w))
+                            else
+                                C3b(C3f.Red * w + C3f.White * (1.0f - w))
+                        c
+                    | None ->
+                        C3b.GreenYellow
 
         DiffViewer.run scene initialCam.CameraView computeColor
 
