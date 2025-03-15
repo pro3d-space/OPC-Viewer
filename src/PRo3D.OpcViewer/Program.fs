@@ -1,23 +1,30 @@
 ﻿open Argu
 open PRo3D.OpcViewer
-open Aardvark.Base
-open System.Text.Json;
+open System.IO
 
 [<EntryPoint>]
 let main argv =
 
-    //let options = JsonSerializerOptions()
-    //options.WriteIndented <- true
-    //options.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
+    let server = Sftp.parseFileZillaConfig (File.ReadAllText(@"W:\Datasets\Pro3D\confidential\2025-02-24_AI-Mars-3D\Mastcam-Z.xml"))
+    
+    let remoteFilePaths = [
+        "sftp://mastcam-z-admin@dig-sftp.joanneum.at:2200/Mission/0600/0610/Job_0610_8618-110-rad-AI-Test/result/Job_0610_8618-110-rad-AI-Test_opc.zip"
+        "sftp://mastcam-z-admin@dig-sftp.joanneum.at:2200/Mission/0600/0610/Job_0610_8618-110-rad-NoAI/result/Job_0610_8618-110-rad-NoAI_opc.zip"
+        "sftp://mastcam-z-admin@dig-sftp.joanneum.at:2200/Mission/0300/0360/Job_0360_8390-079-rad-AI-Mars-3D-Test/result/Job_0360_8390-079-rad-AI-Mars-3D-Test_opc.zip"
+        "sftp://mastcam-z-admin@dig-sftp.joanneum.at:2200/Mission/0300/0360/Job_0360_8390-079-rad-AI-Mars-3D-Test-NoAI/result/Job_0360_8390-079-rad-AI-Mars-3D-Test-NoAI_opc.zip"
+        "sftp://mastcam-z-admin@dig-sftp.joanneum.at:2200/Mission/0300/0361/Job_0361_7105-079-rad/result/Job_0361_7105-079-rad_opc.zip"
+        "sftp://mastcam-z-admin@dig-sftp.joanneum.at:2200/Mission/1300/1399/Job_1399_4068-110-rad/result-AI/Job_1399_4068-110-rad_opc.zip"
+        "sftp://mastcam-z-admin@dig-sftp.joanneum.at:2200/Mission/1300/1399/Job_1399_4068-110-rad/result-NoAI/Job_1399_4068-110-rad_opc.zip"
+        "sftp://mastcam-z-admin@dig-sftp.joanneum.at:2200/Mission/1300/1326/Job_1326_9396-110-rad/result/Job_1326_9396-110-rad_opc.zip"
+        "sftp://mastcam-z-admin@dig-sftp.joanneum.at:2200/Mission/1300/1326/Job_1326_9397-110-rad/result/Job_1326_9397-110-rad_opc.zip"
+        "sftp://mastcam-z-admin@dig-sftp.joanneum.at:2200/Mission/1300/1326/Job_1326_9396-9397-LBS/result/Job_1326_9396-9397-LBS_opc.zip"
+        "sftp://mastcam-z-admin@dig-sftp.joanneum.at:2200/Mission/1300/1326/Job_1326_9397-110-rad-DA-V2-A/result/Job_1326_9397-110-rad-DA-V2-A_opc.zip"
+        "sftp://mastcam-z-admin@dig-sftp.joanneum.at:2200/Mission/1300/1326/Job_1326_9396-9397-LBS-Adjust-DA2/result/Job_1326_9396-9397-LBS-Adjust-DA2_opc.zip"
+        ]
 
-    //let x = Affine3d.Identity
-    //let s = JsonSerializer.Serialize(x, options)
-    //printfn "%s" s
+    server.DownloadFiles remoteFilePaths "E:/tmp" (fun s -> printfn "File downloaded successfully: %s" s)
 
-    //let y = JsonSerializer.Deserialize<Affine3d>(s, options)
-    //printfn "deserialized: %A" y
-
-    //exit 0
+    exit 0
 
     let PROGRAM_NAME = "PRo3D.OpcViewer"
     let VERSION      = "0.0.1"
