@@ -2,7 +2,7 @@
   "profiles": {
     "PRo3D.OpcViewer": {
       "commandName": "Project",
-      "commandLineArgs": "view http://download.vrvis.at/acquisition/32987e2792e0/PRo3D/VictoriaCrater.zip",
+      "commandLineArgs": "view -s \"W:\\Datasets\\Pro3D\\confidential\\2025-02-24_AI-Mars-3D\\Mastcam-Z.xml\" \"sftp://mastcam-z-admin@dig-sftp.joanneum.at:2200/Mission/0600/0610/Job_0610_8618-110-rad-AI-Test/result/Job_0610_8618-110-rad-AI-Test_opc.zip\"",
       "environmentVariables": {
         "pro3d-data": "C:\\pro3ddata"
       }

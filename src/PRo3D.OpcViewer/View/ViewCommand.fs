@@ -52,7 +52,7 @@ module ViewCommand =
             | Some s -> s
             | None -> System.IO.Path.Combine(System.Environment.CurrentDirectory, "data")
 
-        let sftpServerConfig = args.TryGetResult(Args.Sftp) |> Option.map Sftp.parseFileZillaConfig
+        let sftpServerConfig = args.TryGetResult(Args.Sftp) |> Option.map Sftp.parseFileZillaConfigFile
 
         let resolve = Data.resolveDataPath basedir sftpServerConfig
         let resolvedResults = dataRefs |> List.map resolve
