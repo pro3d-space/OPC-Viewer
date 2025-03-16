@@ -17,14 +17,14 @@ module InfoCommand =
 
         let datadir = 
             match args.TryGetResult Args.DataDir with 
-            | Some x -> x 
+            | Some x -> x |> DataDir.ofString
             | None ->
                 printfn "[WARNING] no data directory specified"
                 exit 0
 
         // discover all layers in datadirs ...
         let layerInfos =
-            Utils.searchLayerDir datadir
+            Data.searchLayerDir datadir
             |> List.sortBy (fun x -> x.Path.FullName)
 
         for info in layerInfos do

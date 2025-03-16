@@ -7,6 +7,7 @@
   <ItemGroup>
     <None Include="paket.references" />
     <Compile Include="Utils.fs" />
+    <Compile Include="Data.fs" />
     <Compile Include="Diff\DiffRendering.fs" />
     <Compile Include="Diff\DiffViewer.fs" />
     <Compile Include="Diff\DiffCommand.fs" />

@@ -19,7 +19,7 @@ module ListCommand =
 
         let datadirs = 
             match args.TryGetResult Args.DataDirs with 
-            | Some x -> x 
+            | Some x -> x |> List.map DataDir.ofString
             | None ->
                 printfn "[WARNING] no data directories specified"
                 exit 0
@@ -29,7 +29,7 @@ module ListCommand =
 
         // discover all layers in datadirs ...
         let layerInfos =
-            Utils.searchLayerDirs datadirs
+            Data.searchLayerDirs datadirs
             |> List.sortBy (fun x -> x.Path.FullName)
 
         for info in layerInfos do

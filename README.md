@@ -5,3 +5,12 @@
 Simple viewer for Ordered Point Cloud Data for experimenting with data and processing.
 
 Data can be downloaded [from the pro3d website](https://pro3d.space), e.g. [the victoria crater dataset](http://download.vrvis.at/acquisition/32987e2792e0/PRo3D/VictoriaCrater.zip).
+
+## Quickstart
+
+```
+git clone https://github.com/pro3d-space/OPC-Viewer
+cd OPC-Viewer
+build
+opcviewer view http://download.vrvis.at/acquisition/32987e2792e0/PRo3D/VictoriaCrater.zip
+```

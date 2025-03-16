@@ -9,11 +9,12 @@ open System.Runtime.CompilerServices
 open System
 open Renci.SshNet
 open System.Xml.Linq
+open System.IO.Compression
+open System.Net.Http
 
 type DistanceComputationMode = 
     | Sky
     | Nearest
-
 
 type ComputeDistance = DistanceComputationMode -> V3d -> C3b
     
@@ -86,30 +87,22 @@ type Box3dExtensions() =
 
 module Utils =
 
-    let private (+/) path1 path2 = Path.Combine(path1, path2)
     let private serializer = FsPickler.CreateBinarySerializer()
 
+    let downloadFileAsync (uri: Uri) (destinationPath: string) =
+        async {
+            printfn "downloading %A" uri
+            printfn "  to %s" destinationPath
+            use httpClient = new HttpClient()
+            let! response = httpClient.GetAsync(uri) |> Async.AwaitTask
+            response.EnsureSuccessStatusCode() |> ignore
+            let! content = response.Content.ReadAsByteArrayAsync() |> Async.AwaitTask
+            File.WriteAllBytes(destinationPath, content)
+        }
+        
     /// Loads patch hierarchy for given layer info from disk.
     let loadPatchHierarchy (info : LayerInfo) : PatchHierarchy =
         PatchHierarchy.load serializer.Pickle serializer.UnPickle (OpcPaths.OpcPaths info.Path.FullName)
-
-    /// Enumerates all (recursive) subdirs of given dirs that contain layer data.
-    /// Specifically, a directory is returned if it contains the file "patches/patchhierarchy.xml".
-    let searchLayerDirs (dirs : seq<string>) : LayerInfo list =
-        dirs 
-        |> Seq.map (fun s -> DirectoryInfo(s))
-        |> Seq.filter (fun d -> d.Exists)
-        |> Seq.collect (fun d -> 
-            d.EnumerateDirectories("patches", SearchOption.AllDirectories)
-            )
-        |> Seq.filter (fun d -> File.Exists(d.FullName +/ "patchhierarchy.xml"))
-        |> Seq.map (fun d -> { Path = d.Parent; PatchHierarchyFile = FileInfo(d.FullName +/ "patchhierarchy.xml") })
-        |> List.ofSeq
-
-    /// Enumerates all (recursive) subdirs of given dir that contain layer data.
-    /// Specifically, a directory is returned if it contains the file "patches/patchhierarchy.xml".
-    let searchLayerDir (dir : string) : LayerInfo list =
-        searchLayerDirs [dir]
 
     /// Enumerates all nodes of a QTree in depth-first order.
     let rec traverse (root : QTree<'a>) (includeInner : bool) : 'a seq = seq {
@@ -338,22 +331,22 @@ module Sftp =
         sftp.Disconnect()
 
 
-    type FileZillaServerConfig = {
+    type SftpServerConfig = {
         Host: string
         Port: int
-        Protocol: int
-        Type: int
+        //Protocol: int
+        //Type: int
         User: string
         Pass: string
-        Logontype: int
-        EncodingType: string
-        BypassProxy: int
-        Name: string
-        SyncBrowsing: int
-        DirectoryComparison: int
+        //Logontype: int
+        //EncodingType: string
+        //BypassProxy: int
+        //Name: string
+        //SyncBrowsing: int
+        //DirectoryComparison: int
     }
     with
-        member this.DownloadFiles (remoteFilePaths: string seq) (localBaseDir: string) (progress : string -> unit) =
+        member this.DownloadFiles (remoteFilePaths: string seq, localBaseDir: string, progress : string -> unit) =
             
             let ensureDirectory (path : string) =
                 Directory.CreateDirectory(Path.GetDirectoryName(path)) |> ignore
@@ -374,11 +367,14 @@ module Sftp =
 
                 progress remoteFilePath
 
-        member this.DownloadFile (remoteFilePath: string) (localBaseDir: string) (progress : string -> unit) =
-            this.DownloadFiles [remoteFilePath] localBaseDir progress
+        member this.DownloadFile (remoteFilePath: string, localBaseDir: string, progress : string -> unit) =
+            this.DownloadFiles([remoteFilePath], localBaseDir, progress)
+
+        member this.DownloadFile (remoteFileUri: Uri, localBaseDir: string, progress : string -> unit) =
+            this.DownloadFiles([remoteFileUri.ToString()], localBaseDir, progress)
 
 
-    let parseFileZillaConfig (xmlContent: string) : FileZillaServerConfig =
+    let parseFileZillaConfig (xmlContent: string) : SftpServerConfig =
         let doc = XDocument.Parse(xmlContent)
 
         let serverElement =
@@ -402,16 +398,16 @@ module Sftp =
         let config = {
             Host = getElementValue "Host"
             Port = getElementValue "Port" |> int
-            Protocol = getElementValue "Protocol" |> int
-            Type = getElementValue "Type" |> int
+            //Protocol = getElementValue "Protocol" |> int
+            //Type = getElementValue "Type" |> int
             User = getElementValue "User"
             Pass = decodedPass
-            Logontype = getElementValue "Logontype" |> int
-            EncodingType = getElementValue "EncodingType"
-            BypassProxy = getElementValue "BypassProxy" |> int
-            Name = getElementValue "Name"
-            SyncBrowsing = getElementValue "SyncBrowsing" |> int
-            DirectoryComparison = getElementValue "DirectoryComparison" |> int
+            //Logontype = getElementValue "Logontype" |> int
+            //EncodingType = getElementValue "EncodingType"
+            //BypassProxy = getElementValue "BypassProxy" |> int
+            //Name = getElementValue "Name"
+            //SyncBrowsing = getElementValue "SyncBrowsing" |> int
+            //DirectoryComparison = getElementValue "DirectoryComparison" |> int
         }
 
         config
