@@ -22,14 +22,14 @@ module ExportCommand =
 
     let run (args : ParseResults<Args>) : int =
 
-        let datadir = args.GetResult Args.DataDir
+        let datadir = args.GetResult Args.DataDir |> DataDir.ofString
         let format  = args.GetResult Args.Format
         
         let mutable outfile = args.GetResult Args.Out
 
         // discover all layers in datadirs ...
         let layers =
-            Utils.searchLayerDir datadir
+            Data.searchLayerDir datadir
             |> List.sortBy (fun x -> x.Path.FullName)
 
         let ensureExtension (ext : string) (path : string) : string =

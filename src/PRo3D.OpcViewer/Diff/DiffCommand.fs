@@ -101,8 +101,6 @@ module TriangleTree =
 
             result
 
-        
-
 [<AutoOpen>]
 module DiffCommand =
 
@@ -126,12 +124,12 @@ module DiffCommand =
 
         let maindir = 
             match args.TryGetResult Args.Main with 
-            | Some x -> x 
+            | Some x -> DataDir.ofString x
             | None -> printfn "[ERROR] No main layer specified."; exit 1
 
         let otherdirs =
             match args.TryGetResult Args.Other with 
-            | Some x -> x
+            | Some x -> x |> List.map DataDir.ofString
             | None -> printfn "[ERROR] No other layer(s) specified to compare the main layer with."; exit 1
 
         let novalue = args.GetResult(Args.NoValue, defaultValue = nan)
@@ -139,12 +137,12 @@ module DiffCommand =
         let verbose = args.Contains(Args.Verbose)
 
         let layerMain = 
-            let xs = Utils.searchLayerDir maindir
+            let xs = Data.searchLayerDir maindir
             match xs with
             | [ x ] -> x
             | _     ->
                 printfn "[ERROR] Please specify exactly one main layer."
-                printfn "[ERROR] I found %d layers in \"--main %s\":" xs.Length maindir
+                printfn "[ERROR] I found %d layers in \"--main %s\":" xs.Length (match maindir with | DataDir s -> s)
                 let mutable i = 1
                 for x in xs do
                     printfn "[ERROR] %4d. %s" i x.Path.FullName
@@ -152,7 +150,7 @@ module DiffCommand =
                 exit 1
 
         let otherLayers =
-            Utils.searchLayerDirs otherdirs
+            Data.searchLayerDirs otherdirs
             |> List.filter (fun x -> x.Path.FullName <> layerMain.Path.FullName)
 
         let layerOther = match otherLayers |> List.first with | Some x -> x | None -> failwith "no other layers"

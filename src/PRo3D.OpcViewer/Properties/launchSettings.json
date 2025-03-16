@@ -2,7 +2,7 @@
   "profiles": {
     "PRo3D.OpcViewer": {
       "commandName": "Project",
-      "commandLineArgs": "diff --main \"E:\\tmp\\opcviewer\\Job_1399_4068-110\\result-NoAI\\ZCAM-1399-ZCAM04068-L-RAD-ALL-110-OPC-MULTI-SPHR-20250126\" --other \"E:\\tmp\\opcviewer\\Job_1399_4068-110\\result-AI\\ZCAM-1399-ZCAM04068-L-RAD-ALL-110-OPC-MULTI-SPHR-20250210\"",
+      "commandLineArgs": "view http://download.vrvis.at/acquisition/32987e2792e0/PRo3D/VictoriaCrater.zip",
       "environmentVariables": {
         "pro3d-data": "C:\\pro3ddata"
       }
