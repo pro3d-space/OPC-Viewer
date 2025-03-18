@@ -74,6 +74,9 @@ module ViewCommand =
         // discover all layers in datadirs ...
         let layerInfos = Data.searchLayerDirs datadirs
         
+        for x in layerInfos do
+            printfn "found layer data in %s" x.Path.FullName
+
         // load patch hierarchies ...
         let patchHierarchies = 
             layerInfos
