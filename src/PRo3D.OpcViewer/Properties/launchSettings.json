@@ -2,7 +2,7 @@
   "profiles": {
     "PRo3D.OpcViewer": {
       "commandName": "Project",
-      "commandLineArgs": "view -s \"W:\\Datasets\\Pro3D\\confidential\\2025-02-24_AI-Mars-3D\\Mastcam-Z.xml\" \"sftp://mastcam-z-admin@dig-sftp.joanneum.at:2200/Mission/0600/0610/Job_0610_8618-110-rad-AI-Test/result/Job_0610_8618-110-rad-AI-Test_opc.zip\"",
+      "commandLineArgs": "diff -s \"W:\\Datasets\\Pro3D\\confidential\\2025-02-24_AI-Mars-3D\\Mastcam-Z.xml\" \"sftp://mastcam-z-admin@dig-sftp.joanneum.at:2200/Mission/1300/1326/Job_1326_9396-9397-LBS/result/Job_1326_9396-9397-LBS_opc.zip\" \"sftp://mastcam-z-admin@dig-sftp.joanneum.at:2200/Mission/1300/1326/Job_1326_9396-9397-LBS-Adjust-DA2/result/Job_1326_9396-9397-LBS-Adjust-DA2_opc.zip\"\r\n",
       "environmentVariables": {
         "pro3d-data": "C:\\pro3ddata"
       }
