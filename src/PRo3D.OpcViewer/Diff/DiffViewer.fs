@@ -8,10 +8,9 @@ open Aardvark.GeoSpatial.Opc
 open Aardvark.GeoSpatial.Opc.Load
 open Aardvark.Rendering
 open Aardvark.SceneGraph
-
+open DiffRendering
 open FSharp.Data.Adaptive 
 open MBrace.FsPickler
-open PRo3D.OpcViewer
 
 [<AutoOpen>]
 module DiffShader =

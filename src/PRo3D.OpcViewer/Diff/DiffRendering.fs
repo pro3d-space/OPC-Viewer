@@ -7,9 +7,15 @@ open Aardvark.GeoSpatial.Opc.Load
 open Aardvark.GeoSpatial.Opc.PatchLod
 open Aardvark.Rendering
 open FSharp.Data.Adaptive 
-open PRo3D.OpcViewer
 
 module DiffRendering =
+
+    type DistanceComputationMode = 
+        | Sky
+        | Nearest
+
+    type ComputeDistance = DistanceComputationMode -> V3d -> C3b
+    
 
     let createSceneGraphSimple (signature : IFramebufferSignature) (uploadThreadpool : Load.Runner) (basePath : string) (h : PatchHierarchy) =
         let t = PatchLod.toRoseTree h.tree

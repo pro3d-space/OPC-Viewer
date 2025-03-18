@@ -9,12 +9,6 @@ open System.IO
 open System.Net.Http
 open System.Runtime.CompilerServices
 
-type DistanceComputationMode = 
-    | Sky
-    | Nearest
-
-type ComputeDistance = DistanceComputationMode -> V3d -> C3b
-    
 type LayerInfo = {
     Path: DirectoryInfo
     PatchHierarchyFile: FileInfo
