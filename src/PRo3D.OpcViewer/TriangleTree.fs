@@ -4,8 +4,8 @@ open Aardvark.Base
 
 
 type TriangleTree =
-    | Inner of boundsLeft  : Box3d * boundsRight : Box3d * left : TriangleTree * right : TriangleTree
-    | Leaf of triangles : Triangle3d[]
+    | Inner of left : TriangleTree * right : TriangleTree * bounds : Box3d
+    | Leaf of triangles : Triangle3d[] * bounds : Box3d
     | EmptyLeaf
 
 module TriangleTree =
@@ -38,17 +38,13 @@ module TriangleTree =
 
             do
                 let delta = p'[dim] - splitAt
-                if delta <> 0.0 then System.Diagnostics.Debugger.Break()                        // PARANOID
+                if delta <> 0.0 then failwith "ec9ed574-b30d-412c-93b5-f83d03a35f9e"                        // PARANOID
 
             let aSide = [|Triangle3d(a, p', p)|]
             let bSide = [|Triangle3d(p', b, p)|]
             if x < splitAt then
-                if not (lbb.Contains(aSide[0])) then System.Diagnostics.Debugger.Break()        // PARANOID
-                if not (rbb.Contains(bSide[0])) then System.Diagnostics.Debugger.Break()        // PARANOID
                 (aSide, bSide)
             else
-                if not (lbb.Contains(bSide[0])) then System.Diagnostics.Debugger.Break()        // PARANOID
-                if not (rbb.Contains(aSide[0])) then System.Diagnostics.Debugger.Break()        // PARANOID
                 (bSide, aSide)
 
         /// p is on one side of split plane, and a and b are on the opposite side
@@ -56,20 +52,20 @@ module TriangleTree =
             let x = p[dim]
             let s = splitAt - x
             let a' = p + (a - p) * (s/(a[dim]-x))
-            if a'[dim] - splitAt <> 0.0 then System.Diagnostics.Debugger.Break()                // PARANOID
+            if a'[dim] - splitAt <> 0.0 then failwith "6aca42b0-365a-4ce8-a2bd-6bdbe761427f"                // PARANOID
             let b' = p + (b - p) * (s/(b[dim]-x))
-            if b'[dim] - splitAt <> 0.0 then System.Diagnostics.Debugger.Break()                // PARANOID
+            if b'[dim] - splitAt <> 0.0 then failwith "8e33ae64-7b25-4944-8d03-df4f0c3fb2c2"                // PARANOID
             let pSide = [|Triangle3d(p, a', b')|]
             let otherSide = [|Triangle3d(a', a,  b'); Triangle3d(b', a,  b)|]
             if x < splitAt then
-                if not (lbb.Contains(pSide[0])) then System.Diagnostics.Debugger.Break()        // PARANOID
-                if not (rbb.Contains(otherSide[0])) then System.Diagnostics.Debugger.Break()    // PARANOID
-                if not (rbb.Contains(otherSide[1])) then System.Diagnostics.Debugger.Break()    // PARANOID
+                if not (lbb.Contains(pSide[0]))     then failwith "f36dc15b-aa2b-4886-81d3-12ad22e5e348"    // PARANOID
+                if not (rbb.Contains(otherSide[0])) then failwith "6e37c00f-b36a-4e4a-a52b-44e5a9a4986f"    // PARANOID
+                if not (rbb.Contains(otherSide[1])) then failwith "ab1dea0a-c0df-4f3b-8407-02fc151a1944"    // PARANOID
                 (pSide, otherSide)
             else
-                if not (lbb.Contains(otherSide[0])) then System.Diagnostics.Debugger.Break()    // PARANOID
-                if not (lbb.Contains(otherSide[1])) then System.Diagnostics.Debugger.Break()    // PARANOID
-                if not (rbb.Contains(pSide[0])) then System.Diagnostics.Debugger.Break()        // PARANOID
+                if not (lbb.Contains(otherSide[0])) then failwith "fce54a2f-04b0-47ab-9ac4-6f322b3cf3ac"    // PARANOID
+                if not (lbb.Contains(otherSide[1])) then failwith "702bb833-07ec-4220-8f99-b97cea4aac3b"    // PARANOID
+                if not (rbb.Contains(pSide[0]))     then failwith "0b50eb4e-ae68-4885-af24-c7bce3bde987"    // PARANOID
                 (otherSide, pSide)
 
         if l0 < 1 && l1 < 1 && l2 < 1 then
@@ -111,155 +107,158 @@ module TriangleTree =
         for i in 0 .. ps.Length-1 do bb.ExtendBy(ps[i])
         bb
 
-    let rec private build' (triangles : Triangle3d[]) (bb : Box3d) : TriangleTree =
+    let mutable tsNextProgress = System.DateTime.Now
+    let rec private build' (triangles : Triangle3d[]) (bb : Box3d) (progressRange : Range1d) : TriangleTree =
         
+        if System.DateTime.Now > tsNextProgress then
+            printfn "[PROGRESS] %10.8f" progressRange.Min
+            tsNextProgress <- System.DateTime.Now.AddSeconds(1.0)
+
         //printfn "[BEGIN] %d" triangles.Length
 
+        let mutable recomputeBounds = false
         let count = triangles.Length
         let triangles = triangles |> Array.filter (fun x -> not x.IsDegenerated)
-        //if count <> triangles.Length then
+        if count <> triangles.Length then
+            recomputeBounds <- true
         //    printfn "removed %d degenerated triangles; %d remaining" (count - triangles.Length) triangles.Length
         //    //System.Diagnostics.Debugger.Break()
         
         let count = triangles.Length
         let triangles = triangles |> Array.distinct
-        //if count <> triangles.Length then
+        if count <> triangles.Length then
+            recomputeBounds <- true
         //    printfn "removed %d duplicates; %d remaining" (count - triangles.Length) triangles.Length
         //    //System.Diagnostics.Debugger.Break()
         
         let count = triangles.Length
+        let bb = if recomputeBounds then getBoundingBoxOfTriangles triangles else bb
 
-        if count < 32 then
         
-            //printfn "LEAF  %10d" count
-            Leaf(triangles)
+        let normalDeviation =
+            if count < 512 then
+                let normals = triangles |> Array.map (fun t -> t.Normal)
+                let avgNormal = normals |> Array.average
+                let xs = normals |> Array.map (fun n -> n.Dot(avgNormal))
+                let x = xs |> Array.average
+                //printfn "[NORMAL] %10.8f" x
+                x
+            else
+                0.0
+
+
+        if count < 32 || normalDeviation > 0.95 (*|| (count < 128 && bb.Size[bb.MajorDim] > bb.Volume)*) then
+        
+            //if bb.Size[bb.MajorDim] > bb.Volume then printfn "**************   %d" count
+
+            if count > 0 then
+                Leaf(triangles, bb)
+            else
+                EmptyLeaf
 
         else
             
-            let eps = 0.0000000001                                                                          // NEW IMPLEMENTATION
+            let eps = 0.00001
 
-            let splitDim =
-                //printfn "count = %d" count
-                //for i = 0 to 2 do
-                [0..2]
-                |> List.map (fun i ->
-                    let splitAt = (bb.Min[i] + bb.Max[i]) * 0.5
-                    let (lbb, rbb) = bb.SplitDim(i)   
-                    let split = triangles |> Array.map (fun t -> splitTriangle t i splitAt eps lbb rbb)
-                    let lts = split |> Array.collect fst
-                    let rts = split |> Array.collect snd
+            let splitDim = bb.MajorDim
+            let splitAt = (bb.Min[splitDim] + bb.Max[splitDim]) * 0.5
 
-                    let countAfterSplit = lts.Length + rts.Length
-                    let countAdditionalTriangles = countAfterSplit - count
-                    //printfn "dim=%d delta triangles = %d" i countAdditionalTriangles
-                    (i, countAdditionalTriangles)
-                    )
-                |> List.minBy (fun (_, delta) -> delta)
-                |> fst
+            let (lbb, rbb) = bb.SplitDim(splitDim)
+            if lbb.Max[splitDim] <> splitAt then failwith "a791d0a1-24c4-4bec-8ab5-b3f75e929528"    // PARANOID
+            if rbb.Min[splitDim] <> splitAt then failwith "cc1454ed-1533-49a8-ab30-cba407c007f0"    // PARANOID
 
-            //let majorDim = bb.MajorDim                                                                      // NEW IMPLEMENTATION
-            let splitAt = (bb.Min[splitDim] + bb.Max[splitDim]) * 0.5                                       // NEW IMPLEMENTATION
-
-            let (lbb, rbb) = bb.SplitDim(splitDim)                                                       // OLD IMPLEMENTATION
-            if lbb.Max[splitDim] <> splitAt then System.Diagnostics.Debugger.Break()                        // PARANOID
-            if rbb.Min[splitDim] <> splitAt then System.Diagnostics.Debugger.Break()                        // PARANOID
-            //let lts = triangles |> Array.filter(lbb.Intersects) // triangles intersecting left box        // OLD IMPLEMENTATION
-            //let rts = triangles |> Array.filter(rbb.Intersects) // triangles intersecting right box       // OLD IMPLEMENTATION
-
-            let split = triangles |> Array.map (fun t -> splitTriangle t splitDim splitAt eps lbb rbb)      // NEW IMPLEMENTATION
-            let lts = split |> Array.collect fst                                                            // NEW IMPLEMENTATION
-            let rts = split |> Array.collect snd                                                            // NEW IMPLEMENTATION
+            let split = triangles |> Array.map (fun t -> splitTriangle t splitDim splitAt eps lbb rbb)
+            let lts = split |> Array.collect fst
+            let rts = split |> Array.collect snd
 
             let countAfterSplit = lts.Length + rts.Length
             let countAdditionalTriangles = countAfterSplit - count
             
-            if count > 10000 then
-                printfn "[SPLIT] %10d -> %10d | %10d      %10d delta" count lts.Length rts.Length countAdditionalTriangles
+            if countAfterSplit > count * 3 then
+                printfn "[PARANOID] %10d -> %10d | %10d      %10d delta" count lts.Length rts.Length countAdditionalTriangles
+                failwith "4d5a22b8-3b42-48b7-9624-40b9cc2d2004"
 
-            do                                                                                              // PARANOID
-                let ltsOutside = lts |> Array.filter (fun t -> not (lbb.Contains(t)))                       // PARANOID
-                let rtsOutside = rts |> Array.filter (fun t -> not (rbb.Contains(t)))                       // PARANOID
-                if ltsOutside.Length > 0 then
-                    let t = ltsOutside[0]
-                    let debug0 = lbb.Distance(t.P0)
-                    let debug1 = lbb.Distance(t.P1)
-                    let debug2 = lbb.Distance(t.P2)
-                    System.Diagnostics.Debugger.Break() 
-                    failwith "ba70f09f-f332-41a5-a485-d35d94ccbf7c"
-                if rtsOutside.Length > 0 then
-                    let t = rtsOutside[0]
-                    let debug0 = rbb.Distance(t.P0)
-                    let debug1 = rbb.Distance(t.P1)
-                    let debug2 = rbb.Distance(t.P2)
-                    System.Diagnostics.Debugger.Break()  
-                    failwith "181e03af-df38-433c-b81f-7993423b8bd2"
-                ()
+            //if count > 100000 then
+            //    printfn "[SPLIT] %10d -> %10d | %10d      %10d delta" count lts.Length rts.Length countAdditionalTriangles
 
-            //printfn "SPLIT  %10d %10d" lts.Length rts.Length
-            //if lts.Length = 593 && rts.Length = 0 then System.Diagnostics.Debugger.Break()
+            if lts.Length = 0 || rts.Length = 0 then
+                //printfn "[ZERO ] %10d -> %10d | %10d      %10d delta" count lts.Length rts.Length countAdditionalTriangles
+                Leaf(triangles, bb)
+            else
 
-            let lbb = getBoundingBoxOfTriangles lts
-            let l = 
-                if lbb.Volume > 0.1 then
-                    build' lts lbb
-                else
-                    if lts.Length > 10000 then printfn "L %d" lts.Length
-                    Leaf(lts)
+                
+                let progressRangeSplitAt = progressRange.Lerp(float(lts.Length) / float(countAfterSplit))
+                let progressRangeLeft  = progressRange.SplitLeft(progressRangeSplitAt)
+                let progressRangeRight = progressRange.SplitRight(progressRangeSplitAt)
+                
 
-            let rbb = getBoundingBoxOfTriangles rts
-            let r =
-                if rbb.Volume > 0.1 then 
-                    build' rts rbb
-                else
-                    if rts.Length > 10000 then printfn "R %d" lts.Length
-                    Leaf(rts)
+                let lbb = getBoundingBoxOfTriangles lts
+                let l = //build' lts lbb progressRangeLeft
+                    if lbb.Volume > 0.01 then
+                        build' lts lbb progressRangeLeft
+                    else
+                        if lts.Length > 16384 then printfn "L %d" lts.Length
+                        Leaf(lts, lbb)
+
+                let rbb = getBoundingBoxOfTriangles rts
+                let r = //build' rts rbb progressRangeRight
+                    if rbb.Volume > 0.01 then 
+                        build' rts rbb progressRangeRight
+                    else
+                        if rts.Length > 16384 then printfn "R %d" lts.Length
+                        Leaf(rts, rbb)
             
-            //printfn "INNER %10d %10d %A %A" lts.Length rts.Length (lbb.Size.Round(5)) (rbb.Size.Round(5))
-            //if lts.Length = 67 && rts.Length = 120 then System.Diagnostics.Debugger.Break()
-            Inner(lbb, rbb, l, r)
+                //printfn "INNER %10d %10d %A %A" lts.Length rts.Length (lbb.Size.Round(5)) (rbb.Size.Round(5))
+
+                Inner(l, r, bb)
 
 
     let rec build (triangles : Triangle3d[]) : TriangleTree =
-        build' triangles (getBoundingBoxOfTriangles triangles)
+        let result = build' triangles (getBoundingBoxOfTriangles triangles) Range1d.Unit
+        printfn "[PROGRESS] %10.8f" 1.0
+        result
 
     /// Returns absolute dist and t for nearest hit on ray (with respect to ray.Origin).
     let rec getNearestIntersection (tree : TriangleTree) (ray : Ray3d) : (float * float) option =
         
         match tree with
 
-        | Inner (boxL, boxR, treeL, treeR) ->
+        | Inner (treeL, treeR, bounds) ->
             
-            let (hitL, tL) = boxL.Intersects(ray)
-            let (hitR, tR) = boxR.Intersects(ray)
+            match bounds.Intersects(ray) with
+            | (false, _) -> None
+            | (true, _) ->
+                let l = getNearestIntersection treeL ray
+                let r = getNearestIntersection treeR ray
 
-            let l = if hitL then getNearestIntersection treeL ray else None
-            let r = if hitR then getNearestIntersection treeR ray else None
-
-            match l, r with
-            | None        , None         -> None
-            | Some _      , None         -> l
-            | None        , Some _       -> r
-            | Some (dL, _), Some (dR, _) -> if dL < dR then l else r
+                match l, r with
+                | None        , None         -> None
+                | Some _      , None         -> l
+                | None        , Some _       -> r
+                | Some (dL, _), Some (dR, _) -> if dL < dR then l else r
 
 
-        | Leaf triangles  ->
-            let mutable bestDist = infinity
-            let mutable bestT = nan
-            for triangle in triangles do
-                let (isHit, t) = triangle.Intersects(ray)
-                if (isHit) then
-                    let dist = abs t
-                    if dist < bestDist then
-                        bestDist <- dist
-                        bestT <- t
+        | Leaf (triangles, bounds)  ->
+            match bounds.Intersects(ray) with
+            | (true, _) ->
+                let mutable bestDist = infinity
+                let mutable bestT = nan
+                for triangle in triangles do
+                    let (isHit, t) = triangle.Intersects(ray)
+                    if (isHit) then
+                        let dist = abs t
+                        if dist < bestDist then
+                            bestDist <- dist
+                            bestT <- t
             
-            let result =
-                if isInfinity bestDist then
-                    None 
-                else 
-                    Some (bestDist, bestT)
+                let result =
+                    if isInfinity bestDist then
+                        None 
+                    else 
+                        Some (bestDist, bestT)
 
-            result
+                result
+            | (false, _) -> None
 
         | EmptyLeaf -> None
 
