@@ -29,19 +29,25 @@ module DiffShader =
             else return v.c
         }
 
-    let stableTrafo (v : Vertex) =
+    type VertexWithDistance = {
+            [<Position>]                pos     : V4d
+            [<Normal>]                  n       : V3d
+            [<Color>]                   c       : V4d
+            [<Semantic("LightDir")>]    ldir    : V3d
+            [<Semantic("ViewPosition")>] vp : V4d
+            [<Semantic(DiffRendering.DefaultSemantic.Distances)>] distance : V3d
+        }
+
+    let stableTrafo (v : VertexWithDistance) =
         vertex {
             let vp = uniform.ModelViewTrafo * v.pos
-            let wp = uniform.ModelTrafo * v.pos
-            return {
-                pos = uniform.ProjTrafo * vp
-                wp = wp
-                n = uniform.NormalMatrix * v.n
-                b = uniform.NormalMatrix * v.b
-                t = uniform.NormalMatrix * v.t
-                c = v.c
-                tc = v.tc
-            }
+            return 
+                { v with
+                    pos = uniform.ProjTrafo * vp
+                    vp = vp
+                    n = (uniform.ModelViewTrafo * V4d(v.n, 0.0)).XYZ
+                    c = v.c
+                }
         }
 
 
@@ -74,23 +80,43 @@ module DiffShader =
     type UniformScope with
         member x.ShowDistances : bool = uniform?ShowDistances
 
-    type VertexWithDistance = 
-        {
-            [<Position>] pos : V4d
-            [<Color>] c: V4d
-            [<Semantic(DiffRendering.DefaultSemantic.Distances)>] distance : V3d
-        }
+
+   
+
+    //type VertexWithDistance = 
+    //    {
+    //        [<Position>] pos : V4d
+    //        [<Color>] c: V4d
+    //        [<Semantic(DiffRendering.DefaultSemantic.Distances)>] distance : V3d
+    //    }
 
     let showDistances (v : VertexWithDistance) = 
+        //fragment {
+        //    if uniform.ShowDistances then
+        //        return V4d(v.distance, 1.0)
+        //    else
+        //        return v.c
+        //}
         fragment {
             if uniform.ShowDistances then
-                return V4d(v.distance, 1.0)
+                let n = v.n |> Vec.normalize
+                let ld = v.vp.XYZ |> Vec.normalize
+
+                let ambient = 0.0
+                let diffuse = Vec.dot ld n |> abs
+
+                let l = ambient + (1.0 - ambient) * diffuse
+                return V4d(v.distance * l, 1.0)
             else
                 return v.c
         }
 
 
 module DiffViewer = 
+
+    type ToggleMode = 
+        | First
+        | Second
 
     let run (scene : OpcScene) (initialCameraView : CameraView) (getColor : ComputeDistance) =
 
@@ -105,6 +131,7 @@ module DiffViewer =
         let serializer = FsPickler.CreateBinarySerializer()
 
         let mode = cval DistanceComputationMode.Sky
+        let toggleMode = cval ToggleMode.First
 
         let hierarchies = 
             scene.patchHierarchies |> Seq.toList |> List.map (fun basePath -> 
@@ -148,7 +175,6 @@ module DiffViewer =
             )
         )
 
-
         win.Keyboard.KeyDown(Keys.M).Values.Add(fun _ -> 
             transact (fun _ -> 
                 mode.Value <-
@@ -158,19 +184,36 @@ module DiffViewer =
             )
         )
 
+        win.Keyboard.KeyDown(Keys.T).Values.Add(fun _ -> 
+            transact (fun _ -> 
+                toggleMode.Value <-
+                    match toggleMode.Value with
+                    | ToggleMode.First -> ToggleMode.Second
+                    | ToggleMode.Second -> ToggleMode.First
+            )
+        )
+        
+        let showFirst  = toggleMode |> AVal.map (fun x -> match x with | First -> true  | Second -> false)
+        let showSecond = toggleMode |> AVal.map (fun x -> match x with | First -> false | Second -> true )
+
+        let scene = Sg.ofList [
+            Sg.onOff showFirst hierarchies[0]
+            Sg.onOff showSecond hierarchies[1]
+            ]
+
         let sg = 
-            Sg.ofList hierarchies
+            scene //Sg.ofList hierarchies
             |> Sg.viewTrafo (view |> AVal.map CameraView.viewTrafo)
             |> Sg.projTrafo (frustum |> AVal.map Frustum.projTrafo)
             |> Sg.shader {
-                    do! DiffShader.generateNormal
-                    do! DiffShader.stableTrafo 
-                    do! DefaultSurfaces.constantColor C4f.White 
-                    do! DefaultSurfaces.diffuseTexture 
-                    //do! //DiffShader.LoDColor |> toEffect
-                    do! DiffShader.showDistances 
-                    do! DefaultSurfaces.simpleLighting
-               }
+                do! DiffShader.generateNormal
+                do! DiffShader.stableTrafo 
+                do! DefaultSurfaces.constantColor C4f.White 
+                do! DefaultSurfaces.diffuseTexture 
+                //do! //DiffShader.LoDColor |> toEffect
+                do! DiffShader.showDistances 
+              
+            }
             |> Sg.uniform "LodVisEnabled" lodVisEnabled
             |> Sg.uniform "ShowDistances" showDistances
             |> Sg.fillMode fillMode

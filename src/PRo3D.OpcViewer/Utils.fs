@@ -246,6 +246,9 @@ module Utils =
             triangles[i].P2 <- tp ps[ia[j]]; j <- j + 1
             ()
 
+        //let imax = triangles.Length
+        //triangles <- [| for i in 1..2..imax - 1 do yield triangles.[i] |]
+
         if excludeNaN then
             triangles <- triangles |> Array.filter isValidTriangle
 
