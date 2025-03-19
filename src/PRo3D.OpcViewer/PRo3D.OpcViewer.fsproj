@@ -21,6 +21,7 @@
     <Compile Include="View\ViewCommand.fs" />
     <Compile Include="OpcDataProcessing.fs" />
     <Compile Include="Usage.fs" />
+    <Compile Include="Scratch.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
