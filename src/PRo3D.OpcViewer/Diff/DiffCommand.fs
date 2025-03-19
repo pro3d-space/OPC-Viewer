@@ -9,6 +9,8 @@ open System.IO
 open Aardvark.Opc
 open Aardvark.Opc.DiffRendering
 
+
+
 [<AutoOpen>]
 module DiffCommand =
 
@@ -101,12 +103,25 @@ module DiffCommand =
 
         let sw = Stopwatch.StartNew()
         
-        //let foo = trianglesOther |> Array.filter (fun t ->
-        //    let e0 = t.Edge01.Length
-        //    let e1 = t.Edge12.Length
-        //    let e2 = t.Edge20.Length
-        //    e0 < e1 * 2.0 && e0 < e2 * 2.0
-        //    )
+        //do
+        //    let groups =
+        //        trianglesOther
+        //        |> Seq.collect (fun t -> [(t.P0, t); (t.P1, t); (t.P2, t)])
+        //        |> Seq.groupBy fst
+        //        |> Seq.map (fun (k,v) -> (k, v |> Seq.map snd |> Seq.toList))
+        //        |> Seq.sortByDescending (fun (k, v) -> v.Length)
+        //        |> Seq.toList
+
+        //    printfn "groups: %d" groups.Length
+        //    for (k, ts) in groups do
+        //        printfn "  group (%d entries) with key %A" ts.Length (k.Round(3))
+        //        for t in ts do
+        //            printfn "    %A | %A | %A" (t.P0.Round(3)) (t.P1.Round(3)) (t.P2.Round(3))
+
+        //    exit 1
+        //    ()
+
+
         let triangleTreeOther = TriangleTree.build trianglesOther
         sw.Stop()
         printfn "building tree ......... %A" sw.Elapsed
@@ -184,6 +199,9 @@ module DiffCommand =
 
             ()
 
+        
+ 
+
         // create OpcScene ...
         let initialCam = Utils.createInitialCameraView gbb
         let speed = args.GetResult(Speed, defaultValue = initialCam.Far / 64.0)
@@ -191,12 +209,12 @@ module DiffCommand =
             { 
                 useCompressedTextures = true
                 preTransform     = Trafo3d.Identity
-                patchHierarchies = Seq.delay (fun _ -> [layerMain] |> Seq.map (fun info -> info.Path.FullName))
+                patchHierarchies = Seq.delay (fun _ -> [layerMain; layerOther] |> Seq.map (fun info -> info.Path.FullName))
                 boundingBox      = gbb
                 near             = initialCam.Near
                 far              = initialCam.Far
                 speed            = speed
-                lodDecider       = DefaultMetrics.mars2 
+                lodDecider       = LodDecider.lodDeciderMars Trafo3d.Identity //DefaultMetrics.mars2 
             }
 
         // ... and show it
