@@ -1,12 +1,12 @@
 ﻿namespace Aardvark.Opc
 
+open Aardvark.Application
+open Aardvark.Application.Slim
 open Aardvark.Base
+open Aardvark.Data.Opc
+open Aardvark.GeoSpatial.Opc
 open Aardvark.Rendering
 open Aardvark.SceneGraph
-open Aardvark.Application
-open Aardvark.Data.Opc
-open Aardvark.Application.Slim
-open Aardvark.GeoSpatial.Opc
 
 open FSharp.Data.Adaptive 
 open MBrace.FsPickler
@@ -16,8 +16,6 @@ open Aardvark.GeoSpatial.Opc.Load
 [<AutoOpen>]
 module Shader =
 
-    open Aardvark.Base
-    open Aardvark.Rendering
     open Aardvark.Rendering.Effects
     
     open FShade
@@ -45,6 +43,17 @@ module Shader =
                 c = v.c
                 tc = v.tc
             }
+        }
+
+    type VertexWithDistance = 
+        {
+            [<Position>] pos : V4d
+            [<Semantic(OpcRendering.DefaultSemantic.Distances)>] distance : V3d
+        }
+
+    let showDistances (v : VertexWithDistance) = 
+        fragment {
+            return V4d(v.distance, 1.0)
         }
 
 

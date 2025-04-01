@@ -8,6 +8,8 @@ module Usage =
     type CliArguments =
         | Version
         | [<CliPrefix(CliPrefix.None)                       >] Diff of ParseResults<DiffCommand.Args>
+        | [<CliPrefix(CliPrefix.None)                       >] Export of ParseResults<ExportCommand.Args>
+        | [<CliPrefix(CliPrefix.None)                       >] Info of ParseResults<InfoCommand.Args>
         | [<CliPrefix(CliPrefix.None); AltCommandLine("ls") >] List of ParseResults<ListCommand.Args>
         | [<CliPrefix(CliPrefix.None)                       >] View of ParseResults<ViewCommand.Args>
 
@@ -16,6 +18,8 @@ module Usage =
                 match s with
                 | Version -> "Print program version."
                 | Diff _ -> "Compute difference between a layer with other layers."
+                | Export _ -> "Export data from datasets."
+                | Info _ -> "Show info for dataset."
                 | List _ -> "List datasets."
                 | View _ -> "View datasets."
 
