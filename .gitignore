@@ -3,6 +3,8 @@
 **/obj/**
 *.g.fs
 /PRo3D.WebViewer/*.tmp
+/.paket
 /paket-files
 .vs
 /Aardvark.log
+/data

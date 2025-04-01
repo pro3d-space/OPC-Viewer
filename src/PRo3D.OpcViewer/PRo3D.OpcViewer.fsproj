@@ -6,14 +6,22 @@
   </PropertyGroup>
   <ItemGroup>
     <None Include="paket.references" />
-    <Compile Include="LayerUtils.fs" />
-    <Compile Include="List\ListCommand.fs" />
+    <Compile Include="Utils.fs" />
+    <Compile Include="Sftp.fs" />
+    <Compile Include="Data.fs" />
+    <Compile Include="TriangleTree.fs" />
+    <Compile Include="Diff\DiffRendering.fs" />
+    <Compile Include="Diff\DiffViewer.fs" />
     <Compile Include="Diff\DiffCommand.fs" />
+    <Compile Include="Export\ExportCommand.fs" />
+    <Compile Include="Info\InfoCommand.fs" />
+    <Compile Include="List\ListCommand.fs" />
     <Compile Include="View\OpcRendering.fs" />
     <Compile Include="View\Viewer.fs" />
     <Compile Include="View\ViewCommand.fs" />
     <Compile Include="OpcDataProcessing.fs" />
     <Compile Include="Usage.fs" />
+    <Compile Include="Scratch.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />

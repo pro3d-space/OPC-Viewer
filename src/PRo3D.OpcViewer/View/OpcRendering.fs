@@ -2,17 +2,11 @@
 
 open Aardvark.Base
 open Aardvark.Rendering
-open Aardvark.SceneGraph
-open Aardvark.Application
 open Aardvark.Data.Opc
-open Aardvark.Application.Slim
 open Aardvark.GeoSpatial.Opc
-
-open FSharp.Data.Adaptive 
-open MBrace.FsPickler
-
 open Aardvark.GeoSpatial.Opc.Load
 open Aardvark.GeoSpatial.Opc.PatchLod
+open FSharp.Data.Adaptive 
 
 module OpcRendering =
 
@@ -27,6 +21,11 @@ module OpcRendering =
 
     // define you scope type here to 
     type PatchScope = PatchScope of int
+
+    module DefaultSemantic =
+        [<Literal>]
+        let Distances = "Distances"
+        let DistancesSym = Sym.ofString Distances
 
     let createSceneGraphCustom  (signature : IFramebufferSignature) (uploadThreadpool : Load.Runner) (basePath : string) (h : PatchHierarchy) =
            
