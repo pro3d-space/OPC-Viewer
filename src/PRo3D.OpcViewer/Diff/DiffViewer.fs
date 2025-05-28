@@ -6,12 +6,12 @@ open Aardvark.Base
 open Aardvark.Data.Opc
 open Aardvark.GeoSpatial.Opc
 open Aardvark.GeoSpatial.Opc.Load
+open Aardvark.Glfw
 open Aardvark.Rendering
 open Aardvark.SceneGraph
 open DiffRendering
 open FSharp.Data.Adaptive 
 open MBrace.FsPickler
-open Aardvark.Glfw
 
 [<AutoOpen>]
 module DiffShader =
