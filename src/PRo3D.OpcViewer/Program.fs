@@ -1,5 +1,6 @@
 ﻿open Argu
 open PRo3D.OpcViewer
+open PRo3D.OpcViewer.Data
 open System.IO
 
 [<EntryPoint>]
