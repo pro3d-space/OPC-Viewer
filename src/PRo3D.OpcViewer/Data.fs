@@ -3,6 +3,8 @@
 open System
 open System.IO
 open System.IO.Compression
+open System.Text.Json.Serialization
+open System.Text.Json
 
 [<AutoOpen>]
 module Data =
@@ -159,3 +161,46 @@ module Data =
     /// Specifically, a directory is returned if it contains the file "patches/patchhierarchy.xml".
     let searchLayerDir (dir : DataDir) : LayerInfo list =
         searchLayerDirs [dir]
+
+
+    module Pro3DFile =
+    
+        type Surface = {
+            Guid : Guid
+            IsActive : bool
+            IsVisible : bool
+            Name : string
+            ImportPath : string
+            OpcPaths : string[]
+            RelativePaths : bool
+        }
+
+        type SurfaceItem = {
+            Surfaces : Surface
+        }
+
+        type Surfaces = {
+            Flat: SurfaceItem array
+        }
+
+        type SurfaceModel = {
+            Surfaces: Surfaces
+        }
+
+        type Pro3d = {
+            Version: int
+            SurfaceModel: SurfaceModel
+        }
+        
+        let options =
+            let o = JsonSerializerOptions()
+            o.AllowTrailingCommas <- true
+            o.NumberHandling <- JsonNumberHandling.AllowNamedFloatingPointLiterals ||| JsonNumberHandling.AllowReadingFromString
+            o.PropertyNameCaseInsensitive <- true
+            o.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
+            o.WriteIndented <- true
+            o
+
+        let parse (s : string) = JsonSerializer.Deserialize<Pro3d>(s, options)
+
+        ()

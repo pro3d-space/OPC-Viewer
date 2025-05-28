@@ -11,6 +11,7 @@ open Aardvark.SceneGraph
 open DiffRendering
 open FSharp.Data.Adaptive 
 open MBrace.FsPickler
+open Aardvark.Glfw
 
 [<AutoOpen>]
 module DiffShader =
