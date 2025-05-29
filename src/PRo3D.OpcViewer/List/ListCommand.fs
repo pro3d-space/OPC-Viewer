@@ -7,13 +7,13 @@ module ListCommand =
 
     type Args =
         | [<MainCommand>] DataDirs of data_dir: string list
-        | [<Unique;AltCommandLine("-d") >] Detail
+        | [<Unique;AltCommandLine("-s") >] Stats
 
         interface IArgParserTemplate with
             member s.Usage =
                 match s with
                 | DataDirs _ -> "specify data directories"
-                | Detail     -> "show detail info"
+                | Stats     -> "show detail info"
 
     let run (args : ParseResults<Args>) : int =
 
@@ -25,7 +25,7 @@ module ListCommand =
                 exit 0
                 []
 
-        let showDetails = args.Contains(Args.Detail)
+        let showStats = args.Contains(Args.Stats)
 
         // discover all layers in datadirs ...
         let layerInfos =
@@ -34,6 +34,6 @@ module ListCommand =
 
         for info in layerInfos do
             printfn "%s" info.Path.FullName
-            if showDetails then Utils.printLayerInfo info
+            if showStats then Utils.printLayerInfo info
 
         0
