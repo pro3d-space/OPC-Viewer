@@ -94,5 +94,5 @@ The .zip file will be downloaded and extracted to a local cache folder. Files ar
 If the server requires authentication, then you can specify a config file in FileZilla format using `--sftp`, e.g.
 
 ```
-opcviewer view "sftp://alice@sftp-server.example.org:2200/ex/ample/dataset.zip" --sftp "path/to/filezilla-config.xml" 
+opcviewer view "sftp://alice@sftp-server.example.org:2200/ex/ample/some_opc.zip" --sftp "path/to/filezilla-config.xml" 
 ```

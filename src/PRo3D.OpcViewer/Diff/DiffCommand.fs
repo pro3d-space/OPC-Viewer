@@ -98,6 +98,9 @@ module DiffCommand =
         let ground = Plane3d(sky, V3d.Zero)
         let w2p = ground.GetWorldToPlane()
 
+        let trianglesMainWithNaN = Utils.getTriangles false hierarchyMain
+        let trianglesMain = trianglesMainWithNaN |> List.filter Utils.isValidTriangle |> Array.ofList
+
         let trianglesOtherWithNaN = Utils.getTriangles false hierarchyOther
         let trianglesOther = trianglesOtherWithNaN |> List.filter Utils.isValidTriangle |> Array.ofList
 
@@ -121,7 +124,7 @@ module DiffCommand =
         //    exit 1
         //    ()
 
-
+        let triangleTreeMain  = TriangleTree.build trianglesMain
         let triangleTreeOther = TriangleTree.build trianglesOther
         sw.Stop()
         printfn "building tree ......... %A" sw.Elapsed
@@ -169,7 +172,7 @@ module DiffCommand =
 
         let p2c = Dictionary<V3d,C3b>()
 
-        do
+        if false then // debug
             let outfile = @"E:\qs.pts"
 
             let max = max (abs rangeT.Min) (abs rangeT.Max)
@@ -247,6 +250,6 @@ module DiffCommand =
                     | None ->
                         C3b.GreenYellow
 
-        DiffViewer.run scene initialCam.CameraView computeColor
+        DiffViewer.run scene initialCam.CameraView computeColor triangleTreeMain triangleTreeOther
 
         //0

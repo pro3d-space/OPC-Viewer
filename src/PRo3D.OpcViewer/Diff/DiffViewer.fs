@@ -12,6 +12,7 @@ open Aardvark.SceneGraph
 open DiffRendering
 open FSharp.Data.Adaptive 
 open MBrace.FsPickler
+open PRo3D.OpcViewer
 
 [<AutoOpen>]
 module DiffShader =
@@ -119,7 +120,7 @@ module DiffViewer =
         | First
         | Second
 
-    let run (scene : OpcScene) (initialCameraView : CameraView) (getColor : ComputeDistance) =
+    let run (scene : OpcScene) (initialCameraView : CameraView) (getColor : ComputeDistance) (tree0 : TriangleTree) (tree1 : TriangleTree) =
 
         Aardvark.Init()
 
@@ -147,6 +148,16 @@ module DiffViewer =
 
         let lodVisEnabled = cval true
         let fillMode = cval FillMode.Fill
+
+        let cursorPos = AVal.init V3d.Zero
+        let cursor = 
+            Box3d.FromCenterAndSize(V3d.Zero, V3d.III * 0.002)
+            |> Sg.box' C4b.Red 
+            |> Sg.trafo (cursorPos |> AVal.map Trafo3d.Translation)
+            |> Sg.shader {
+                do! DefaultSurfaces.stableTrafo
+                //do! Shader.noPick
+            }
 
         win.Keyboard.KeyDown(Keys.PageUp).Values.Add(fun _ -> 
             transact (fun _ -> speed.Value <- speed.Value * 1.5)
@@ -193,14 +204,96 @@ module DiffViewer =
                     | ToggleMode.Second -> ToggleMode.First
             )
         )
+
+        win.Mouse.Move.Values.Add(fun (_, p) -> 
+
+            let pos = V2i(p.Position.X, p.Position.Y)
+            let region = Box2i.FromMinAndSize(pos, V2i.II)
+
+            if win.FramebufferSize.AllGreater(pos) then
+
+                // get current view / proj
+                let view = view.GetValue()
+                let frustum = frustum.GetValue()
+                let viewProj = CameraView.viewTrafo view * Frustum.projTrafo frustum
+                let ndc = V3d(V2d(p.NormalizedPosition.X, 1.0 - p.NormalizedPosition.Y) * 2.0 - V2d.II, 0.0)
+                let wp = viewProj.Backward.TransformPosProj(ndc)
+
+                let ray = Ray3d(view.Location, (wp - view.Location).Normalized)
+                
+                //let ray = Ray3d(pGlobal, sky)
+                let hit0 = TriangleTree.getNearestIntersection tree0 ray
+                let hit1 = TriangleTree.getNearestIntersection tree1 ray
+
+                let maybeT =
+                    match hit0, hit1 with
+                    | None        , None         -> None
+                    | Some (_, t0), None         -> if t0 > 0.0 then Some t0 else None
+                    | None        , Some (_, t1) -> if t1 > 0.0 then Some t1 else None
+                    | Some (_, t0), Some (_, t1) ->
+                        match t0 > 0, t1 > 0 with
+                        | false, false -> None
+                        | false, true -> Some t1
+                        | true, false -> Some t0
+                        | true, true -> Some (min t0 t1)
+                
+                match maybeT with
+                | None ->
+                    transact (fun _ -> 
+                        cursorPos.Value <- V3d.NaN  // no hit
+                    )
+                | Some t ->
+                    let hitPosGlobal = ray.GetPointOnRay(t)
+                    printfn "t = %f     hitPosGlobal = %A" t hitPosGlobal
+
+                    transact (fun _ -> 
+                        cursorPos.Value <- wp
+                    )
+
+                //printfn "mouse move: p = %A     wp = %A          cam = %A      ray = %A" p.Position wp view.Location ray
+                //printfn "mouse move: ray = %A     %A    %A" ray hit0 hit1
+
+
+                //// get depth values
+                //let renderedDepth = offscreenBuffer.[DefaultSemantic.DepthStencil].GetValue()
+                //let depth = renderedDepth.DownloadDepth(region = region)
+
+                //// get picked object
+                //let pickIds = runtime.Download(offscreenBuffer.[pickIdSym].GetValue(), region = region) |> unbox<PixImage<int32>>
+                //let pickId = pickIds.GetChannel(0L)[0,0]
+                //let object = infoTable.LookupLinear(pickId) 
+
+                //match object with
+                //| None -> 
+                //    ()
+                //| Some object -> 
+                //    Log.line "hit: %A" object.Name
+                //    // unproject
+                //    let d = depth[0,0] |> float
+                //    let viewProj = CameraView.viewTrafo view *  Frustum.projTrafo frustum
+                //    // window coordinates and ndc flip in Y
+                //    let ndc = V3d(V2d(p.NormalizedPosition.X, 1.0 - p.NormalizedPosition.Y) * 2.0 - V2d.II, d * 2.0 - 1.0)
+                //    // compute world space position
+                //    let wp = viewProj.Backward.TransformPosProj(ndc)
+                //    Log.line $"viewpos: {p}" 
+                //    let localPos = object.Local2Global.Backward.TransformPos(wp)
+                //    Log.line $"localpos: {localPos}"
+
+                //    transact (fun _ -> 
+                //        cursorPos.Value <- wp
+                //    )
+                
+        )
         
         let showFirst  = toggleMode |> AVal.map (fun x -> match x with | First -> true  | Second -> false)
         let showSecond = toggleMode |> AVal.map (fun x -> match x with | First -> false | Second -> true )
 
-        let scene = Sg.ofList [
-            Sg.onOff showFirst hierarchies[0]
-            Sg.onOff showSecond hierarchies[1]
-            ]
+        let scene =
+            Sg.ofList [
+                Sg.onOff showFirst hierarchies[0]
+                Sg.onOff showSecond hierarchies[1]
+                ]
+            |> Sg.andAlso cursor
 
         let sg = 
             scene //Sg.ofList hierarchies
