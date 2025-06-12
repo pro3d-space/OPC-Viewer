@@ -37,5 +37,7 @@ nuget Aardvark.FontProvider ~> 0.1.0
 
 nuget Aardvark.Data.Opc
 
+nuget Aardvark.FontProvider ~> 0.1.0
+
 nuget Argu ~> 6.2.5
 nuget SSH.NET ~> 2024.2.0
