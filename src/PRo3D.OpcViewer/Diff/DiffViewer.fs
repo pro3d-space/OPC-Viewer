@@ -6,13 +6,16 @@ open Aardvark.Base
 open Aardvark.Data.Opc
 open Aardvark.GeoSpatial.Opc
 open Aardvark.GeoSpatial.Opc.Load
-open Aardvark.Glfw
 open Aardvark.Rendering
 open Aardvark.SceneGraph
 open DiffRendering
 open FSharp.Data.Adaptive 
 open MBrace.FsPickler
 open PRo3D.OpcViewer
+open System
+open Aardvark.Rendering.Text
+open FShade
+open Aardvark.Rendering.Effects
 
 [<AutoOpen>]
 module DiffShader =
@@ -116,11 +119,14 @@ module DiffShader =
 
 module DiffViewer = 
 
+    open Aardvark.FontProvider
+    type Font = GoogleFontProvider<"Roboto Mono">
+
     type ToggleMode = 
         | First
         | Second
 
-    let run (scene : OpcScene) (initialCameraView : CameraView) (getColor : ComputeDistance) (tree0 : TriangleTree) (tree1 : TriangleTree) =
+    let run (scene : OpcScene) (initialCameraView : CameraView) (env : DiffEnv) =
 
         Aardvark.Init()
 
@@ -138,25 +144,28 @@ module DiffViewer =
         let hierarchies = 
             scene.patchHierarchies |> Seq.toList |> List.map (fun basePath -> 
                 let h = PatchHierarchy.load serializer.Pickle serializer.UnPickle (OpcPaths.OpcPaths basePath)
-                DiffRendering.createSceneGraphCustom win.FramebufferSignature runner basePath h mode getColor
+                DiffRendering.createSceneGraphCustom win.FramebufferSignature runner basePath h mode env.GetColor
             )
 
         let speed = AVal.init scene.speed
 
         let view = initialCameraView |> DefaultCameraController.controlWithSpeed speed win.Mouse win.Keyboard win.Time
         let frustum = win.Sizes |> AVal.map (fun s -> Frustum.perspective 60.0 scene.near scene.far (float s.X / float s.Y))
+        let aspect = win.Sizes |> AVal.map (fun s -> float s.X / float s.Y)
 
         let lodVisEnabled = cval true
         let fillMode = cval FillMode.Fill
 
-        let cursorPos = AVal.init V3d.Zero
+        let pickPos = AVal.init V3d.NaN
+        let cursorPos = AVal.init V3d.NaN
+        let layerDistAtCursor = AVal.init nan
+
         let cursor = 
             Box3d.FromCenterAndSize(V3d.Zero, V3d.III * 0.002)
             |> Sg.box' C4b.Red 
-            |> Sg.trafo (cursorPos |> AVal.map Trafo3d.Translation)
+            |> Sg.trafo (pickPos |> AVal.map Trafo3d.Translation)
             |> Sg.shader {
                 do! DefaultSurfaces.stableTrafo
-                //do! Shader.noPick
             }
 
         win.Keyboard.KeyDown(Keys.PageUp).Values.Add(fun _ -> 
@@ -217,81 +226,116 @@ module DiffViewer =
                 let frustum = frustum.GetValue()
                 let viewProj = CameraView.viewTrafo view * Frustum.projTrafo frustum
                 let ndc = V3d(V2d(p.NormalizedPosition.X, 1.0 - p.NormalizedPosition.Y) * 2.0 - V2d.II, 0.0)
-                let wp = viewProj.Backward.TransformPosProj(ndc)
-
-                let ray = Ray3d(view.Location, (wp - view.Location).Normalized)
+                let pp = viewProj.Backward.TransformPosProj(ndc) // pick position
+                let ray = Ray3d(view.Location, (pp - view.Location).Normalized)
                 
                 //let ray = Ray3d(pGlobal, sky)
-                let hit0 = TriangleTree.getNearestIntersection tree0 ray
-                let hit1 = TriangleTree.getNearestIntersection tree1 ray
+                let hit0 = TriangleTree.getNearestIntersection env.Tree0 ray
+                let hit1 = TriangleTree.getNearestIntersection env.Tree1 ray
 
-                let maybeT =
+                let (maybeT, isFirst) =
                     match hit0, hit1 with
-                    | None        , None         -> None
-                    | Some (_, t0), None         -> if t0 > 0.0 then Some t0 else None
-                    | None        , Some (_, t1) -> if t1 > 0.0 then Some t1 else None
+                    | None        , None         -> (None, false)
+                    | Some (_, t0), None         -> if t0 > 0.0 then (Some t0, true) else (None, false)
+                    | None        , Some (_, t1) -> if t1 > 0.0 then (Some t1, false) else (None, false)
                     | Some (_, t0), Some (_, t1) ->
                         match t0 > 0, t1 > 0 with
-                        | false, false -> None
-                        | false, true -> Some t1
-                        | true, false -> Some t0
-                        | true, true -> Some (min t0 t1)
+                        | false, false -> (None, false)
+                        | false, true -> (Some t1, false)
+                        | true, false -> (Some t0, true)
+                        | true, true ->
+                            if t0 < t1 then
+                                (Some t0, true)
+                            else
+                                (Some t1, false)
                 
                 match maybeT with
-                | None ->
-                    transact (fun _ -> 
-                        cursorPos.Value <- V3d.NaN  // no hit
+                | None ->  // no hit (at mouse position)
+                    transact (fun _ ->
+                        pickPos.Value <- V3d.NaN
+                        cursorPos.Value <- V3d.NaN
+                        layerDistAtCursor.Value <- nan
                     )
-                | Some t ->
+                | Some t -> // hit (at mouse position)
                     let hitPosGlobal = ray.GetPointOnRay(t)
-                    printfn "t = %f     hitPosGlobal = %A" t hitPosGlobal
+                    let skyRay = Ray3d(hitPosGlobal, env.Sky)
 
-                    transact (fun _ -> 
-                        cursorPos.Value <- wp
+                    let otherHitPos =
+                        if isFirst then
+                            TriangleTree.getNearestIntersection env.Tree1 skyRay
+                        else
+                            TriangleTree.getNearestIntersection env.Tree0 skyRay
+
+                    let distFromFirstToSecondLayer =
+                        match otherHitPos with
+                        | None -> nan
+                        | Some (_, otherT) -> if isFirst then otherT else -otherT
+                        
+
+                    //printfn "t = %f     hitPosGlobal = %A" t hitPosGlobal
+                    //printfn "isFirst = %A     dist = %0.4f" isFirst distFromFirstToSecondLayer
+
+                    transact (fun _ ->
+                        pickPos.Value <- pp
+                        cursorPos.Value <- hitPosGlobal
+                        layerDistAtCursor.Value <- distFromFirstToSecondLayer
                     )
 
                 //printfn "mouse move: p = %A     wp = %A          cam = %A      ray = %A" p.Position wp view.Location ray
                 //printfn "mouse move: ray = %A     %A    %A" ray hit0 hit1
 
-
-                //// get depth values
-                //let renderedDepth = offscreenBuffer.[DefaultSemantic.DepthStencil].GetValue()
-                //let depth = renderedDepth.DownloadDepth(region = region)
-
-                //// get picked object
-                //let pickIds = runtime.Download(offscreenBuffer.[pickIdSym].GetValue(), region = region) |> unbox<PixImage<int32>>
-                //let pickId = pickIds.GetChannel(0L)[0,0]
-                //let object = infoTable.LookupLinear(pickId) 
-
-                //match object with
-                //| None -> 
-                //    ()
-                //| Some object -> 
-                //    Log.line "hit: %A" object.Name
-                //    // unproject
-                //    let d = depth[0,0] |> float
-                //    let viewProj = CameraView.viewTrafo view *  Frustum.projTrafo frustum
-                //    // window coordinates and ndc flip in Y
-                //    let ndc = V3d(V2d(p.NormalizedPosition.X, 1.0 - p.NormalizedPosition.Y) * 2.0 - V2d.II, d * 2.0 - 1.0)
-                //    // compute world space position
-                //    let wp = viewProj.Backward.TransformPosProj(ndc)
-                //    Log.line $"viewpos: {p}" 
-                //    let localPos = object.Local2Global.Backward.TransformPos(wp)
-                //    Log.line $"localpos: {localPos}"
-
-                //    transact (fun _ -> 
-                //        cursorPos.Value <- wp
-                //    )
-                
         )
+
+        // --------- info text -----------------
+        let font = Font.Font
+        let scale = aspect |> AVal.map (fun aspect -> Trafo3d.Scale(V3d(1.0, aspect, 1.0)))
         
+        let text = (toggleMode, cursorPos) ||> AVal.map2 (fun tgl p ->
+
+            let offset = layerDistAtCursor.Value * env.Sky
+
+            String.concat Environment.NewLine [
+                
+                sprintf "%s %s" (match tgl with | First -> "*" | Second -> " ") env.Label0
+
+                sprintf "%s %s" (match tgl with | First -> " " | Second -> "*") env.Label1
+
+                ""
+
+                //sprintf "sky %0.3f %0.3f %0.3f" env.Sky.X env.Sky.Y env.Sky.Z
+
+                match p.IsNaN with
+                     | true -> ""
+                     | false -> sprintf "pos = %0.3f %0.3f %0.3f" p.X p.Y p.Z
+
+                match isNaN layerDistAtCursor.Value with
+                     | true -> ""
+                     | false -> sprintf "Δ   = %+0.3f" layerDistAtCursor.Value
+            ]
+            )
+
+        let info =
+            Sg.ofList [
+                Sg.text font C4b.Black text
+                |> Sg.trafo (scale |> AVal.map (fun s -> Trafo3d.Scale(0.04) * s * Trafo3d.Translation(-0.95, 0.90,0.0)))
+
+                Sg.text font C4b.Yellow text
+                |> Sg.trafo (scale |> AVal.map (fun s -> Trafo3d.Scale(0.04) * s * Trafo3d.Translation(-0.954, 0.904,0.0)))
+            ]
+            |> Sg.viewTrafo' Trafo3d.Identity
+            |> Sg.projTrafo' Trafo3d.Identity
+
+
+        // ------------ layers ----------------------
         let showFirst  = toggleMode |> AVal.map (fun x -> match x with | First -> true  | Second -> false)
         let showSecond = toggleMode |> AVal.map (fun x -> match x with | First -> false | Second -> true )
 
+        // ------------ final scene ------------------
         let scene =
             Sg.ofList [
                 Sg.onOff showFirst hierarchies[0]
                 Sg.onOff showSecond hierarchies[1]
+                info
                 ]
             |> Sg.andAlso cursor
 

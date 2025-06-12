@@ -7,9 +7,6 @@ open System.Collections.Generic
 open System.Diagnostics
 open System.IO
 open Aardvark.Opc
-open Aardvark.Opc.DiffRendering
-
-
 
 [<AutoOpen>]
 module DiffCommand =
@@ -223,7 +220,7 @@ module DiffCommand =
         // ... and show it
         
         let max = max (abs rangeT.Min) (abs rangeT.Max)
-        let computeColor (mode : DistanceComputationMode) (p : V3d) : C3b =
+        let getColor (mode : DistanceComputationMode) (p : V3d) : C3b =
 
             match mode with
             | DistanceComputationMode.Nearest -> C3b.Red
@@ -250,6 +247,13 @@ module DiffCommand =
                     | None ->
                         C3b.GreenYellow
 
-        DiffViewer.run scene initialCam.CameraView computeColor triangleTreeMain triangleTreeOther
+        let env = {
+            Label0 = Path.GetFileName layerMain.Path.FullName
+            Label1 = Path.GetFileName layerOther.Path.FullName
+            Tree0 = triangleTreeMain
+            Tree1 = triangleTreeOther
+            GetColor = getColor
+            Sky = sky
+            }
 
-        //0
+        DiffViewer.run scene initialCam.CameraView env

@@ -37,13 +37,6 @@ module LodDecider =
 
 module DiffRendering =
 
-    type DistanceComputationMode = 
-        | Sky
-        | Nearest
-
-    type ComputeDistance = DistanceComputationMode -> V3d -> C3b
-    
-
     let createSceneGraphSimple (signature : IFramebufferSignature) (uploadThreadpool : Load.Runner) (basePath : string) (h : PatchHierarchy) =
         let t = PatchLod.toRoseTree h.tree
          
@@ -61,7 +54,7 @@ module DiffRendering =
         let Distances = "Distances"
         let DistancesSym = Sym.ofString Distances
 
-    let createSceneGraphCustom  (signature : IFramebufferSignature) (uploadThreadpool : Load.Runner) (basePath : string) (h : PatchHierarchy) (mode : aval<DistanceComputationMode>) (getColor : ComputeDistance) =
+    let createSceneGraphCustom  (signature : IFramebufferSignature) (uploadThreadpool : Load.Runner) (basePath : string) (h : PatchHierarchy) (mode : aval<DistanceComputationMode>) (getColor : ComputeDistanceColor) =
            
         // use this anonymous scope extraction for patchNodes for potentially expensive computations, needed later in the getter functions
         let context (n : PatchNode) (s : Ag.Scope) =

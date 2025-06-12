@@ -12,6 +12,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "_", "_", "{E0EC0FBB-AC1C-48
 		build.cmd = build.cmd
 		build.sh = build.sh
 		global.json = global.json
+		opcviewer = opcviewer
+		opcviewer.cmd = opcviewer.cmd
 		paket.dependencies = paket.dependencies
 	EndProjectSection
 EndProject
@@ -28,5 +30,8 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {FE19EA40-DD5F-4AB3-B364-B019A22CEE56}
 	EndGlobalSection
 EndGlobal
