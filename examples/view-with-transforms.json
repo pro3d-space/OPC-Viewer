@@ -1,0 +1,18 @@
+{
+  "command": "view",
+  "data": [
+    {
+      "path": "../data/opc-layer1",
+      "transform": "[[1, 0, 0, 100], [0, 1, 0, 0], [0, 0, 1, 50], [0, 0, 0, 1]]"
+    },
+    {
+      "path": "../models/rover.obj",
+      "transform": "[[0.5, 0, 0, 0], [0, 0.5, 0, 0], [0, 0, 0.5, 0], [0, 0, 0, 1]]"
+    },
+    {
+      "path": "../models/terrain.obj"
+    }
+  ],
+  "speed": 1.5,
+  "baseDir": "../assets"
+}

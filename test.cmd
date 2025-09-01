@@ -1,0 +1,3 @@
+@echo off
+echo Running PRo3D.Viewer test suite...
+dotnet run --project tests/PRo3D.Viewer.Tests

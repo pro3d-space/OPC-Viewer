@@ -1,0 +1,10 @@
+{
+  "command": "view",
+  "data": [
+    { "path": "../data/mars-rover-site" },
+    { "path": "../models/rover.obj" },
+    { "path": "../models/terrain.obj" }
+  ],
+  "speed": 1.5,
+  "baseDir": "../assets"
+}

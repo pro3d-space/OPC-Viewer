@@ -1,0 +1,20 @@
+{
+  "command": "view",
+  "data": [
+    {
+      "path": "https://example.com/datasets/mars.zip",
+      "type": "opc"
+    },
+    {
+      "path": "./models/rover.obj",
+      "type": "obj"
+    },
+    {
+      "path": "./models/terrain.obj",
+      "type": "obj"
+    }
+  ],
+  "speed": 10.0,
+  "sftp": "./config/sftp-config.xml",
+  "baseDir": "./data"
+}

@@ -1,0 +1,14 @@
+{
+  "command": "view",
+  "data": [
+    { "path": "../data/local-dataset" },
+    { "path": "C:\\Data\\Datasets\\mars-rover" },
+    { "path": "/home/user/opc-data" },
+    { "path": "W:\\NetworkShare\\datasets\\terrain" },
+    { "path": "https://data.example.com/opc-archive.zip" },
+    { "path": "relative-model.obj" },
+    { "path": "C:\\Models\\absolute-model.obj" },
+    { "path": "W:\\SharedModels\\network-model.obj" }
+  ],
+  "speed": 1.0
+}

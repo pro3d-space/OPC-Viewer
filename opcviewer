@@ -1,4 +1,0 @@
-#!/bin/bash
-
-#./publish/PRo3D.OpcViewer/PRo3D.OpcViewer "$@"
-./src/PRo3D.OpcViewer/bin/Release/net8.0/PRo3D.OpcViewer "$@"

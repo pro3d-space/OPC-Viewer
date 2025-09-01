@@ -1,0 +1,9 @@
+{
+  "command": "view",
+  "data": [
+    { "path": "../data/dataset1" },
+    { "path": "../data/dataset2" }
+  ],
+  "speed": 2.0,
+  "screenshots": "../outputs/screenshots"
+}

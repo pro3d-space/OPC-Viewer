@@ -1,0 +1,11 @@
+{
+  "command": "diff",
+  "data": [
+    "./data/scan_before",
+    "./data/scan_after"
+  ],
+  "noValue": 0.0,
+  "speed": 8.0,
+  "verbose": true,
+  "baseDir": "./datasets"
+}
