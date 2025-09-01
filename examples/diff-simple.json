@@ -1,0 +1,7 @@
+{
+  "command": "diff",
+  "data": [
+    "../data/layer-2023",
+    "../data/layer-2024"
+  ]
+}

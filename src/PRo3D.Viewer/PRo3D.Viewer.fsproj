@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="paket.references" />
+    <Compile Include="Shared\RenderingConstants.fs" />
+    <Compile Include="Shared\SharedShaders.fs" />
+    <Compile Include="Shared\ViewerCommon.fs" />
+    <Compile Include="Utils.fs" />
+    <Compile Include="Sftp.fs" />
+    <Compile Include="Data.fs" />
+    <Compile Include="TriangleTree.fs" />
+    <Compile Include="Diff\DiffInfo.fs" />
+    <Compile Include="Diff\DiffRendering.fs" />
+    <Compile Include="Export\ExportCommand.fs" />
+    <Compile Include="List\ListCommand.fs" />
+    <Compile Include="View\OpcRendering.fs" />
+    <Compile Include="Shared\UnifiedViewer.fs" />
+    <Compile Include="OpcDataProcessing.fs" />
+    <Compile Include="Project\ProjectFile.fs" />
+    <Compile Include="Configuration.fs" />
+    <Compile Include="View\ViewCommand.fs" />
+    <Compile Include="Diff\DiffCommand.fs" />
+    <Compile Include="ConfigurationBuilder.fs" />
+    <Compile Include="Project\ProjectCommand.fs" />
+    <Compile Include="Usage.fs" />
+    <Compile Include="Project\DryRunSerializer.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+  <Import Project="..\..\.paket\Paket.Restore.targets" />
+</Project>

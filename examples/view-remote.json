@@ -1,0 +1,10 @@
+{
+  "command": "view",
+  "data": [
+    { "path": "https://example.com/datasets/mars-data.zip" },
+    { "path": "sftp://server.example.com/path/to/dataset" },
+    { "path": "local-model.obj" }
+  ],
+  "sftp": "../config/sftp-servers.xml",
+  "speed": 2.5
+}

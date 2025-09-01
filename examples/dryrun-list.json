@@ -1,0 +1,9 @@
+{
+  "command": "list",
+  "data": [
+    "./data/region1",
+    "./data/region2",
+    "./data/region3"
+  ],
+  "stats": true
+}

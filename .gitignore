@@ -8,4 +8,5 @@
 .vs
 /Aardvark.log
 /data
-/src/PRo3D.OpcViewer/*.user
+/src/PRo3D.Viewer/*.user
+/screenshots

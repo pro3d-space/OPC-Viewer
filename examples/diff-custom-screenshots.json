@@ -1,0 +1,10 @@
+{
+  "command": "diff",
+  "data": [
+    "../data/layer1",
+    "../data/layer2"
+  ],
+  "noValue": -999.0,
+  "speed": 1.5,
+  "screenshots": "./screenshots/diff-analysis"
+}

@@ -1,0 +1,6 @@
+{
+  "command": "export",
+  "dataDir": "./data/mars_surface",
+  "format": "pts",
+  "out": "./exports/mars_surface.pts"
+}
