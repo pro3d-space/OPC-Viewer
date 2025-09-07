@@ -39,6 +39,8 @@ module DryRunSerializer =
             BaseDir = args.TryGetResult ViewCommand.Args.BaseDir
             BackgroundColor = args.TryGetResult ViewCommand.Args.BackgroundColor
             Screenshots = globalScreenshots
+            ForceDownload = if args.Contains ViewCommand.Args.ForceDownload then Some true else None
+            Verbose = if args.Contains ViewCommand.Args.Verbose then Some true else None
         }
     
     /// Converts Diff command arguments to DiffProject
@@ -58,6 +60,7 @@ module DryRunSerializer =
             BaseDir = args.TryGetResult DiffCommand.Args.BaseDir
             BackgroundColor = args.TryGetResult DiffCommand.Args.BackgroundColor
             Screenshots = globalScreenshots
+            ForceDownload = if args.Contains DiffCommand.Args.ForceDownload then Some true else None
         }
     
     /// Converts List command arguments to ListProject
@@ -81,11 +84,22 @@ module DryRunSerializer =
             | Some ExportCommand.ExportFormat.Ply -> Some "ply"
             | None -> None
         
+        // Convert the single DataDir to a Data array
+        let data = 
+            match args.TryGetResult ExportCommand.Args.DataDir with
+            | Some dir -> 
+                Some [| { Path = dir; Type = Some DataType.Opc; Transform = None } |]
+            | None -> None
+        
         {
             Command = "export"
-            DataDir = args.TryGetResult ExportCommand.Args.DataDir
+            Data = data
             Format = format
             Out = args.TryGetResult ExportCommand.Args.Out
+            Sftp = None           // Not available in current CLI args
+            BaseDir = None        // Not available in current CLI args
+            ForceDownload = None  // Not available in current CLI args
+            Verbose = None        // Not available in current CLI args
         }
     
     /// Converts Project command arguments by loading and returning the JSON file content

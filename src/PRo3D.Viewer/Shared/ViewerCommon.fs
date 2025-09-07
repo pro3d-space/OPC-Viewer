@@ -13,7 +13,7 @@ open PRo3D.Viewer.Shared.RenderingConstants
 module ViewerCommon =
     
     /// Setup common keyboard handlers for viewer controls
-    let inline setupCommonKeyboardHandlers (win : ^a when ^a : (member Keyboard : IKeyboard)) (speed : cval<float>) (lodVisEnabled : cval<bool>) (fillMode : cval<FillMode>) =
+    let inline setupCommonKeyboardHandlers (win : ^a when ^a : (member Keyboard : IKeyboard)) (speed : cval<float>) (fillMode : cval<FillMode>) =
         let keyboard = (^a : (member Keyboard : IKeyboard) win)
         
         // Speed controls (PageUp/PageDown)
@@ -23,11 +23,6 @@ module ViewerCommon =
         
         keyboard.KeyDown(Keys.PageDown).Values.Add(fun _ -> 
             transact (fun _ -> speed.Value <- speed.Value / SPEED_MULTIPLIER)
-        )
-        
-        // LoD visualization toggle (L key)
-        keyboard.KeyDown(Keys.L).Values.Add(fun _ -> 
-            transact (fun _ -> lodVisEnabled.Value <- not lodVisEnabled.Value)
         )
         
         // Fill mode toggle (F key)

@@ -1,0 +1,244 @@
+{
+  "description": "OPC pairs for AI vs regular reconstruction comparison",
+  "sourceFiles": [
+    "W:\\Datasets\\Pro3D\\AI_Candidates_List.pdf",
+    "examples\\diff-ai-comparison.json"
+  ],
+  "totalPairs": 34,
+  "pairs": [
+    {
+      "sol": 300,
+      "regular": "Job_0320_8341-034-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0300/0320/Job_0320_8341-034-rad/result/Job_0320_8341-034-rad_opc.zip",
+      "ai": "Job_0320_8341-034-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0300/0320/Job_0320_8341-034-rad-AI/result/Job_0320_8341-034-rad-AI_opc.zip"
+    },
+    {
+      "sol": 300,
+      "regular": "Job_0349_8380-110-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0300/0349/Job_0349_8380-110-rad/result/Job_0349_8380-110-rad_opc.zip",
+      "ai": "Job_0349_8380-110-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0300/0349/Job_0349_8380-110-rad-AI/result/Job_0349_8380-110-rad-AI_opc.zip"
+    },
+    {
+      "sol": 300,
+      "regular": "Job_0360_8390-079-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0300/0360/Job_0360_8390-079-rad/result/Job_0360_8390-079-rad_opc.zip",
+      "ai": "Job_0360_8390-079-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0300/0360/Job_0360_8390-079-rad-AI/result/Job_0360_8390-079-rad-AI_opc.zip"
+    },
+    {
+      "sol": 300,
+      "regular": "Job_0361_3326-100-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0300/0361/Job_0361_3326-100-rad/result/Job_0361_3326-100-rad_opc.zip",
+      "ai": "Job_0361_3326-100-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0300/0361/Job_0361_3326-100-rad-AI/result/Job_0361_3326-100-rad-AI_opc.zip"
+    },
+    {
+      "sol": 400,
+      "regular": "Job_0461_8482-110-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0400/0461/Job_0461_8482-110-rad/result/Job_0461_8482-110-rad_opc.zip",
+      "ai": "Job_0461_8482-110-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0400/0461/Job_0461_8482-110-rad-AI/result/Job_0461_8482-110-rad-AI_opc.zip"
+    },
+    {
+      "sol": 400,
+      "regular": "Job_0464_3381-034-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0400/0464/Job_0464_3381-034-rad/result/Job_0464_3381-034-rad_opc.zip",
+      "ai": "Job_0464_3381-034-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0400/0464/Job_0464_3381-034-rad-AI/result/Job_0464_3381-034-rad-AI_opc.zip"
+    },
+    {
+      "sol": 400,
+      "regular": "Job_0492_8517-034-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0400/0492/Job_0492_8517-034-rad/result/Job_0492_8517-034-rad_opc.zip",
+      "ai": "Job_0492_8517-034-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0400/0492/Job_0492_8517-034-rad-AI/result/Job_0492_8517-034-rad-AI_opc.zip"
+    },
+    {
+      "sol": 400,
+      "regular": "Job_0466_8486-110-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0400/0466/Job_0466_8486-110-rad/result/Job_0466_8486-110-rad_opc.zip",
+      "ai": "Job_0466_8486-110-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0400/0466/Job_0466_8486-110-rad-AI/result/Job_0466_8486-110-rad-AI_opc.zip"
+    },
+    {
+      "sol": 500,
+      "regular": "Job_0501_8522-079-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0500/0501/Job_0501_8522-079-rad/result/Job_0501_8522-079-rad_opc.zip",
+      "ai": "Job_0501_8522-079-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0500/0501/Job_0501_8522-079-rad-AI/result/Job_0501_8522-079-rad-AI_opc.zip"
+    },
+    {
+      "sol": 500,
+      "regular": "Job_0557_3439-034-rad_opc.zip",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0500/0557/Job_0557_3439-034-rad/result/Job_0557_3439-034-rad_opc.zip",
+      "ai": "Job_0557_3439-034-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0500/0557/Job_0557_3439-034-rad-AI/result/Job_0557_3439-034-rad-AI_opc.zip"
+    },
+    {
+      "sol": 500,
+      "regular": "Job_0565_8586-034-rad_opc.zip",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0500/0565/Job_0565_8586-034-rad/result/Job_0565_8586-034-rad_opc.zip",
+      "ai": "Job_0565_8586-034-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0500/0565/Job_0565_8586-034-rad-AI/result/Job_0565_8586-034-rad-AI_opc.zip"
+    },
+    {
+      "sol": 800,
+      "regular": "Job_0856_8860-110-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0800/0856/Job_0856_8860-110-rad/result/Job_0856_8860-110-rad_opc.zip",
+      "ai": "Job_0856_8860-110-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0800/0856/Job_0856_8860-110-rad-AI/result/Job_0856_8860-110-rad-AI_opc.zip"
+    },
+    {
+      "sol": 800,
+      "regular": "Job_0817_8833-034-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0800/0817/Job_0817_8833-034-rad/result/Job_0817_8833-034-rad_opc.zip",
+      "ai": "Job_0817_8833-034-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0800/0817/Job_0817_8833-034-rad-AI/result/Job_0817_8833-034-rad-AI_opc.zip"
+    },
+    {
+      "sol": 900,
+      "regular": "Job_0910_8915-063-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0910/Job_0910_8915-063-rad/result/Job_0910_8915-063-rad_opc.zip",
+      "ai": "Job_0910_8915-063-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0910/Job_0910_8915-063-rad-AI/result/Job_0910_8915-063-rad-AI_opc.zip"
+    },
+    {
+      "sol": 900,
+      "regular": "Job_0917_3773-034-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0917/Job_0917_3773-034-rad/result/Job_0917_3773-034-rad_opc.zip",
+      "ai": "Job_0917_3773-034-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0917/Job_0917_3773-034-rad-AI/result/Job_0917_3773-034-rad-AI_opc.zip"
+    },
+    {
+      "sol": 900,
+      "regular": "Job_0911_3765-034-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0911/Job_0911_3765-034-rad/result/Job_0911_3765-034-rad_opc.zip",
+      "ai": "Job_0911_3765-034-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0911/Job_0911_3765-034-rad-AI/result/Job_0911_3765-034-rad-AI_opc.zip"
+    },
+    {
+      "sol": 900,
+      "regular": "Job_0911_8917-110-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0911/Job_0911_8917-110-rad/result/Job_0911_8917-110-rad_opc.zip",
+      "ai": "Job_0911_8917-110-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0911/Job_0911_8917-110-rad-AI/result/Job_0911_8917-110-rad-AI_opc.zip"
+    },
+    {
+      "sol": 900,
+      "regular": "Job_0913_3768-110-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0913/Job_0913_3768-110-rad/result/Job_0913_3768-110-rad_opc.zip",
+      "ai": "Job_0913_3768-110-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0913/Job_0913_3768-110-rad-AI/result/Job_0913_3768-110-rad-AI_opc.zip"
+    },
+    {
+      "sol": 900,
+      "regular": "Job_0913_8920-110-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0913/Job_0913_8920-110-rad/result/Job_0913_8920-110-rad_opc.zip",
+      "ai": "Job_0913_8920-110-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0913/Job_0913_8920-110-rad-AI/result/Job_0913_8920-110-rad-AI_opc.zip"
+    },
+    {
+      "sol": 900,
+      "regular": "Job_0914_8922-110-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0914/Job_0914_8922-110-rad/result/Job_0914_8922-110-rad_opc.zip",
+      "ai": "Job_0914_8922-110-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0914/Job_0914_8922-110-rad-AI/result/Job_0914_8922-110-rad-AI_opc.zip"
+    },
+    {
+      "sol": 900,
+      "regular": "Job_0933_8945-063-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0933/Job_0933_8945-063-rad/result/Job_0933_8945-063-rad_opc.zip",
+      "ai": "Job_0933_8945-063-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0933/Job_0933_8945-063-rad-AI/result/Job_0933_8945-063-rad-AI_opc.zip"
+    },
+    {
+      "sol": 900,
+      "regular": "Job_0955_8973-110-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0955/Job_0955_8973-110-rad/result/Job_0955_8973-110-rad_opc.zip",
+      "ai": "Job_0955_8973-110-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0955/Job_0955_8973-110-rad-AI/result/Job_0955_8973-110-rad-AI_opc.zip"
+    },
+    {
+      "sol": 900,
+      "regular": "Job_0958_8980-110-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0958/Job_0958_8980-110-rad/result/Job_0958_8980-110-rad_opc.zip",
+      "ai": "Job_0958_8980-110-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0958/Job_0958_8980-110-rad-AI/result/Job_0958_8980-110-rad-AI_opc.zip"
+    },
+    {
+      "sol": 1000,
+      "regular": "Job_1043_9063-034-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/1000/1043/Job_1043_9063-034-rad/result/Job_1043_9063-034-rad_opc.zip",
+      "ai": "Job_1043_9063-034-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/1000/1043/Job_1043_9063-034-rad-AI/result/Job_1043_9063-034-rad-AI_opc.zip"
+    },
+    {
+      "sol": 1000,
+      "regular": "Job_1045_9060-034-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/1000/1045/Job_1045_9060-034-rad/result/Job_1045_9060-034-rad_opc.zip",
+      "ai": "Job_1045_9060-034-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/1000/1045/Job_1045_9060-034-rad-AI/result/Job_1045_9060-034-rad-AI_opc.zip"
+    },
+    {
+      "sol": 1100,
+      "regular": "Job_1130_9150-079-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/1100/1130/Job_1130_9150-079-rad/result/Job_1130_9150-079-rad_opc.zip",
+      "ai": "Job_1130_9150-079-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/1100/1130/Job_1130_9150-079-rad-AI/result/Job_1130_9150-079-rad-AI_opc.zip",
+      "notes": "to be repeated normal reconstruction"
+    },
+    {
+      "sol": 1100,
+      "regular": "Job_1155_9193-048-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/1100/1155/Job_1155_9193-048-rad/result/Job_1155_9193-048-rad_opc.zip",
+      "ai": "Job_1155_9193-048-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/1100/1155/Job_1155_9193-048-rad-AI/result/Job_1155_9193-048-rad-AI_opc.zip"
+    },
+    {
+      "sol": 1100,
+      "regular": "Job_1177_9218-110-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/1100/1177/Job_1177_9218-110-rad/result/Job_1177_9218-110-rad_opc.zip",
+      "ai": "Job_1177_9218-110-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/1100/1177/Job_1177_9218-110-rad-AI/result/Job_1177_9218-110-rad-AI_opc.zip",
+      "notes": "extra computed by BAA"
+    },
+    {
+      "sol": 1100,
+      "regular": "Job_1178_9219-063-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/1100/1178/Job_1178_9219-063-rad/result/Job_1178_9219-063-rad_opc.zip",
+      "ai": "Job_1178_9219-063-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/1100/1178/Job_1178_9219-063-rad-AI/result/Job_1178_9219-063-rad-AI_opc.zip",
+      "notes": "extra computed by BAA"
+    },
+    {
+      "sol": 1200,
+      "regular": "Job_1203_9246-110-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/1200/1203/Job_1203_9246-110-rad/result/Job_1203_9246-110-rad_opc.zip",
+      "ai": "Job_1203_9246-110-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/1200/1203/Job_1203_9246-110-rad-AI/result/Job_1203_9246-110-rad-AI_opc.zip"
+    },
+    {
+      "sol": 1200,
+      "regular": "Job_1229_9279-110-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/1200/1229/Job_1229_9279-110-rad/result/Job_1229_9279-110-rad_opc.zip",
+      "ai": "Job_1229_9279-110-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/1200/1229/Job_1229_9279-110-rad-AI/result/Job_1229_9279-110-rad-AI_opc.zip"
+    },
+    {
+      "sol": 1300,
+      "regular": "Job_1311_9374-048-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/1300/1311/Job_1311_9374-048-rad/result/Job_1311_9374-048-rad_opc.zip",
+      "ai": "Job_1311_9374-048-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/1300/1311/Job_1311_9374-048-rad-AI/result/Job_1311_9374-048-rad-AI_opc.zip"
+    },
+    {
+      "sol": 1300,
+      "regular": "Job_1337_9408-034-rad_opc",
+      "regularPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/1300/1337/Job_1337_9408-034-rad/result/Job_1337_9408-034-rad_opc.zip",
+      "ai": "Job_1337_9408-034-rad-AI_opc",
+      "aiPath": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/1300/1337/Job_1337_9408-034-rad-AI/result/Job_1337_9408-034-rad-AI_opc.zip"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:fsprojects.github.io)",
+      "WebFetch(domain:github.com)",
+      "Bash(dotnet fsi:*)",
+      "Bash(dotnet build:*)",
+      "Bash(timeout:*)",
+      "Bash(./PRo3D.OpcViewer.exe nonexistent.json)",
+      "Bash(./PRo3D.OpcViewer.exe --help)",
+      "Bash(./PRo3D.OpcViewer.exe --version)",
+      "Read(C:\\Data\\Development\\OPC-Viewer/**)",
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

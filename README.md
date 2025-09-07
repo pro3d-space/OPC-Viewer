@@ -71,6 +71,7 @@ View OPC datasets and OBJ models.
 pro3dviewer view <DATASET>
 pro3dviewer view <DATASET> --background-color red
 pro3dviewer view <DATASET> --bg #FF0000
+pro3dviewer view <DATASET> --force-download  # Force re-download and re-extract cached remote data
 ```
 
 ## Diff
@@ -80,6 +81,7 @@ Visualize geometric distance between two layers.
 ```
 pro3dviewer diff <LAYER1> <LAYER2>
 pro3dviewer diff <LAYER1> <LAYER2> --bg white
+pro3dviewer diff <LAYER1> <LAYER2> --force-download  # Force re-download and re-extract cached remote data
 ```
 
 ## Keyboard Shortcuts
@@ -133,8 +135,10 @@ Instead of command-line arguments, use JSON project files:
 
 ```bash
 pro3dviewer project config.json
+pro3dviewer project config.json --force-download  # Force re-download and re-extract cached remote data
 # or shortcut:
 pro3dviewer config.json
+pro3dviewer config.json -f  # Force re-download and re-extract cached remote data
 ```
 
 ### View Project

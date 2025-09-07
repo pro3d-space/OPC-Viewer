@@ -2,3 +2,6 @@ FSharp.Core
 Expecto
 Expecto.FsCheck
 System.Text.Json
+Aardvark.Base
+Uncodium.Geometry.TriangleSet
+SSH.NET

@@ -4,6 +4,7 @@ open Argu
 open Aardvark.Base
 open PRo3D.Viewer.Configuration
 open PRo3D.Viewer.Project
+open PRo3D.Viewer.Shared.PathUtils
 open System.IO
 
 /// Builders for constructing type-safe configurations from various sources
@@ -34,6 +35,8 @@ module ConfigurationBuilder =
             BaseDir = args.TryGetResult ViewCommand.Args.BaseDir
             BackgroundColor = args.TryGetResult ViewCommand.Args.BackgroundColor
             Screenshots = None  // CLI args don't have screenshots field yet - will be added later
+            ForceDownload = if args.Contains ViewCommand.Args.ForceDownload then Some true else None
+            Verbose = if args.Contains ViewCommand.Args.Verbose then Some true else None
         }
     
     /// Build ViewConfig from parsed JSON project
@@ -46,11 +49,7 @@ module ConfigurationBuilder =
                 dataEntries
                 |> Array.map (fun entry ->
                     // Resolve path
-                    let resolvedPath = 
-                        match entry.Path with
-                        | path when path.StartsWith("http://") || path.StartsWith("https://") || path.StartsWith("sftp://") -> path
-                        | path when Path.IsPathRooted(path) -> path
-                        | path -> Path.GetFullPath(Path.Combine(projectDir, path))
+                    let resolvedPath = resolveProjectPath projectDir entry.Path
                     
                     // Determine type (use specified type or infer)
                     let dataType =
@@ -65,26 +64,7 @@ module ConfigurationBuilder =
                 // No data provided
                 [||]
         
-        let baseDir =
-            project.BaseDir
-            |> Option.map (fun bd ->
-                if Path.IsPathRooted(bd) then bd
-                else Path.GetFullPath(Path.Combine(projectDir, bd))
-            )
-        
-        let sftp =
-            project.Sftp
-            |> Option.map (fun s ->
-                if Path.IsPathRooted(s) then s
-                else Path.GetFullPath(Path.Combine(projectDir, s))
-            )
-        
-        let screenshots =
-            project.Screenshots
-            |> Option.map (fun s ->
-                if Path.IsPathRooted(s) then s
-                else Path.GetFullPath(Path.Combine(projectDir, s))
-            )
+        let (baseDir, sftp, screenshots) = resolveConfigPaths projectDir project.BaseDir project.Sftp project.Screenshots
         
         {
             Data = data
@@ -93,6 +73,8 @@ module ConfigurationBuilder =
             BaseDir = baseDir
             BackgroundColor = project.BackgroundColor
             Screenshots = screenshots
+            ForceDownload = project.ForceDownload
+            Verbose = project.Verbose
         }
     
     /// Build DiffConfig from command-line arguments
@@ -106,42 +88,20 @@ module ConfigurationBuilder =
             BaseDir = args.TryGetResult DiffCommand.Args.BaseDir
             BackgroundColor = args.TryGetResult DiffCommand.Args.BackgroundColor
             Screenshots = None  // CLI args don't have screenshots field yet - will be added later
+            ForceDownload = if args.Contains DiffCommand.Args.ForceDownload then Some true else None
         }
     
     /// Build DiffConfig from parsed JSON project
     let fromDiffProject (projectDir: string) (project: DiffProject) : DiffConfig =
         // Resolve paths relative to project file directory
-        let resolvePath (path: string) =
-            match path with
-            | p when p.StartsWith("http://") || p.StartsWith("https://") || p.StartsWith("sftp://") -> p
-            | p when Path.IsPathRooted(p) -> p
-            | p -> Path.GetFullPath(Path.Combine(projectDir, p))
+        let resolvePath = resolveProjectPath projectDir
         
         let data =
             project.Data
             |> Option.map (Array.map resolvePath)
             |> Option.defaultValue [||]
         
-        let baseDir =
-            project.BaseDir
-            |> Option.map (fun bd ->
-                if Path.IsPathRooted(bd) then bd
-                else Path.GetFullPath(Path.Combine(projectDir, bd))
-            )
-        
-        let sftp =
-            project.Sftp
-            |> Option.map (fun s ->
-                if Path.IsPathRooted(s) then s
-                else Path.GetFullPath(Path.Combine(projectDir, s))
-            )
-        
-        let screenshots =
-            project.Screenshots
-            |> Option.map (fun s ->
-                if Path.IsPathRooted(s) then s
-                else Path.GetFullPath(Path.Combine(projectDir, s))
-            )
+        let (baseDir, sftp, screenshots) = resolveConfigPaths projectDir project.BaseDir project.Sftp project.Screenshots
         
         {
             Data = data
@@ -152,7 +112,63 @@ module ConfigurationBuilder =
             BaseDir = baseDir
             BackgroundColor = project.BackgroundColor
             Screenshots = screenshots
+            ForceDownload = project.ForceDownload
         }
     
-    // Export and List commands don't have JSON project support yet
-    // These are placeholders for future implementation
+    /// Build ExportConfig from command-line arguments
+    let fromExportArgs (args: ParseResults<ExportCommand.Args>) : ExportConfig =
+        // Get the data directory and convert to Data array
+        let data = 
+            match args.TryGetResult ExportCommand.Args.DataDir with
+            | Some dir -> 
+                [| { Path = dir; Type = Some DataType.Opc; Transform = None } |]
+            | None -> [||]
+        
+        // Get the export format
+        let format = 
+            args.GetResult(ExportCommand.Args.Format, ExportCommand.ExportFormat.Pts)
+        
+        {
+            Data = data
+            Format = 
+                match format with
+                | ExportCommand.ExportFormat.Pts -> ExportFormat.Pts
+                | ExportCommand.ExportFormat.Ply -> ExportFormat.Ply
+            OutFile = args.TryGetResult ExportCommand.Args.Out
+            Sftp = None  // Not available in current CLI args
+            BaseDir = None  // Not available in current CLI args
+            ForceDownload = None  // Not available in current CLI args
+            Verbose = None  // Not available in current CLI args
+        }
+    
+    /// Build ExportConfig from parsed JSON project
+    let fromExportProject (projectDir: string) (project: ExportProject) : ExportConfig =
+        // Resolve paths relative to project file directory
+        let resolvePath = resolveProjectPath projectDir
+        
+        let data =
+            project.Data
+            |> Option.map (Array.map (fun entry ->
+                { entry with Path = resolvePath entry.Path }
+            ))
+            |> Option.defaultValue [||]
+        
+        // Parse format string to ExportFormat
+        let format = 
+            match project.Format with
+            | Some "pts" -> ExportFormat.Pts
+            | Some "ply" -> ExportFormat.Ply
+            | _ -> ExportFormat.Pts  // Default to PTS
+        
+        // Resolve configuration paths using common helper
+        let (baseDir, sftp, _) = resolveConfigPaths projectDir project.BaseDir project.Sftp None
+        
+        {
+            Data = data
+            Format = format
+            OutFile = project.Out |> Option.map resolvePath
+            Sftp = sftp
+            BaseDir = baseDir
+            ForceDownload = project.ForceDownload
+            Verbose = project.Verbose
+        }

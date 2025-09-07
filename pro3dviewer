@@ -1,4 +1,9 @@
 #!/bin/bash
 
-#./publish/PRo3D.Viewer/PRo3D.Viewer "$@"
-./src/PRo3D.Viewer/bin/Release/net8.0/PRo3D.Viewer "$@"
+EXECUTABLE_PATH="./src/PRo3D.Viewer/bin/Release/net8.0/PRo3D.Viewer"
+
+if [ ! -f "$EXECUTABLE_PATH" ]; then
+    ./build.sh
+fi
+
+"$EXECUTABLE_PATH" "$@"
