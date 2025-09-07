@@ -25,10 +25,12 @@ type ViewProject = {
     Command: string
     Data: DataEntry array option        // Unified data array
     Speed: float option
+    Verbose: bool option
     Sftp: string option
     BaseDir: string option
     BackgroundColor: string option
     Screenshots: string option
+    ForceDownload: bool option
 }
 
 /// Diff command project configuration - strongly typed public API
@@ -42,6 +44,7 @@ type DiffProject = {
     BaseDir: string option
     BackgroundColor: string option
     Screenshots: string option
+    ForceDownload: bool option
 }
 
 /// List command project configuration - strongly typed public API
@@ -54,9 +57,13 @@ type ListProject = {
 /// Export command project configuration - strongly typed public API
 type ExportProject = {
     Command: string
-    DataDir: string option
+    Data: DataEntry array option  // Changed from DataDir to Data array
     Format: string option  // "pts" or "ply"
     Out: string option
+    Sftp: string option
+    BaseDir: string option
+    ForceDownload: bool option
+    Verbose: bool option
 }
 
 /// Discriminated union for all project types
@@ -141,6 +148,12 @@ module ProjectFile =
                         | true, prop when prop.ValueKind = JsonValueKind.Number -> Some (prop.GetDouble())
                         | _ -> None
                         
+                    let verbose = 
+                        match root.TryGetProperty("verbose") with
+                        | true, prop when prop.ValueKind = JsonValueKind.True -> Some true
+                        | true, prop when prop.ValueKind = JsonValueKind.False -> Some false
+                        | _ -> None
+                        
                     let sftp = 
                         match root.TryGetProperty("sftp") with
                         | true, prop when prop.ValueKind = JsonValueKind.String -> Some (prop.GetString())
@@ -159,6 +172,12 @@ module ProjectFile =
                     let screenshots = 
                         match root.TryGetProperty("screenshots") with
                         | true, prop when prop.ValueKind = JsonValueKind.String -> Some (prop.GetString())
+                        | _ -> None
+                        
+                    let forceDownload = 
+                        match root.TryGetProperty("forceDownload") with
+                        | true, prop when prop.ValueKind = JsonValueKind.True -> Some true
+                        | true, prop when prop.ValueKind = JsonValueKind.False -> Some false
                         | _ -> None
                     
                     // Validate paths
@@ -181,6 +200,8 @@ module ProjectFile =
                             BaseDir = baseDir
                             BackgroundColor = backgroundColor
                             Screenshots = screenshots
+                            ForceDownload = forceDownload
+                            Verbose = verbose
                         }
                         ViewConfig viewProject
         with
@@ -261,6 +282,12 @@ module ProjectFile =
                                 match root.TryGetProperty("screenshots") with
                                 | true, prop when prop.ValueKind = JsonValueKind.String -> Some (prop.GetString())
                                 | _ -> None
+                                
+                            let forceDownload = 
+                                match root.TryGetProperty("forceDownload") with
+                                | true, prop when prop.ValueKind = JsonValueKind.True -> Some true
+                                | true, prop when prop.ValueKind = JsonValueKind.False -> Some false
+                                | _ -> None
                             
                             // Create strongly-typed public DiffProject
                             let diffProject : DiffProject = {
@@ -273,6 +300,7 @@ module ProjectFile =
                                 BaseDir = baseDir
                                 BackgroundColor = backgroundColor
                                 Screenshots = screenshots
+                                ForceDownload = forceDownload
                             }
                             DiffConfig diffProject
                     | Some dirs -> InvalidConfig (sprintf "Diff command requires exactly 2 data entries, got %d" dirs.Length)
@@ -345,10 +373,31 @@ module ProjectFile =
                 if command <> "export" then
                     InvalidConfig "Export project must have command='export'"
                 else
-                    // Parse data directory
-                    let dataDir = 
-                        match root.TryGetProperty("dataDir") with
-                        | true, prop when prop.ValueKind = JsonValueKind.String -> Some (prop.GetString())
+                    // Parse unified data array (same as view project)
+                    let data = 
+                        match root.TryGetProperty("data") with
+                        | true, prop when prop.ValueKind = JsonValueKind.Array ->
+                            let items = 
+                                prop.EnumerateArray() 
+                                |> Seq.toArray
+                                |> Array.map (fun item ->
+                                    let path = item.GetProperty("path").GetString()
+                                    let dataType = 
+                                        match item.TryGetProperty("type") with
+                                        | true, t when t.ValueKind = JsonValueKind.String -> 
+                                            match t.GetString().ToLowerInvariant() with
+                                            | "opc" -> Some Opc
+                                            | "obj" -> Some Obj
+                                            | _ -> None  // Invalid type, will infer
+                                        | _ -> None  // No type specified, will infer
+                                    let transform = 
+                                        match item.TryGetProperty("transform") with
+                                        | true, t when t.ValueKind <> JsonValueKind.Null -> 
+                                            Some (M44d.Parse(t.GetString()))
+                                        | _ -> None
+                                    { Path = path; Type = dataType; Transform = transform }: DataEntry
+                                )
+                            Some items
                         | _ -> None
                     
                     // Parse format
@@ -366,18 +415,48 @@ module ProjectFile =
                         | true, prop when prop.ValueKind = JsonValueKind.String -> Some (prop.GetString())
                         | _ -> None
                     
+                    // Parse forceDownload
+                    let forceDownload = 
+                        match root.TryGetProperty("forceDownload") with
+                        | true, prop when prop.ValueKind = JsonValueKind.True -> Some true
+                        | true, prop when prop.ValueKind = JsonValueKind.False -> Some false
+                        | _ -> None
+                    
+                    // Parse verbose
+                    let verbose = 
+                        match root.TryGetProperty("verbose") with
+                        | true, prop when prop.ValueKind = JsonValueKind.True -> Some true
+                        | true, prop when prop.ValueKind = JsonValueKind.False -> Some false
+                        | _ -> None
+                    
+                    // Parse sftp
+                    let sftp = 
+                        match root.TryGetProperty("sftp") with
+                        | true, prop when prop.ValueKind = JsonValueKind.String -> Some (prop.GetString())
+                        | _ -> None
+                    
+                    // Parse baseDir
+                    let baseDir = 
+                        match root.TryGetProperty("baseDir") with
+                        | true, prop when prop.ValueKind = JsonValueKind.String -> Some (prop.GetString())
+                        | _ -> None
+                    
                     // Validate required fields
-                    match dataDir, format, out with
+                    match data, format, out with
                     | Some _, Some _, Some _ ->
                         // Create strongly-typed public ExportProject
                         let exportProject : ExportProject = {
                             Command = command
-                            DataDir = dataDir
+                            Data = data
                             Format = format
                             Out = out
+                            Sftp = sftp
+                            BaseDir = baseDir
+                            ForceDownload = forceDownload
+                            Verbose = verbose
                         }
                         ExportConfig exportProject
-                    | _ -> InvalidConfig "Export project must specify dataDir, format, and out fields"
+                    | _ -> InvalidConfig "Export project must specify data, format, and out fields"
         with
         | ex -> InvalidConfig (sprintf "Failed to parse export project: %s" ex.Message)
     
@@ -430,6 +509,7 @@ module ProjectFile =
         project.Sftp |> Option.iter (fun s -> writer.WriteString("sftp", s))
         project.BaseDir |> Option.iter (fun s -> writer.WriteString("baseDir", s))
         project.BackgroundColor |> Option.iter (fun s -> writer.WriteString("backgroundColor", s))
+        project.ForceDownload |> Option.iter (fun f -> writer.WriteBoolean("forceDownload", f))
         
         writer.WriteEndObject()
         writer.Flush()
@@ -460,6 +540,7 @@ module ProjectFile =
         project.Sftp |> Option.iter (fun s -> writer.WriteString("sftp", s))
         project.BaseDir |> Option.iter (fun s -> writer.WriteString("baseDir", s))
         project.BackgroundColor |> Option.iter (fun s -> writer.WriteString("backgroundColor", s))
+        project.ForceDownload |> Option.iter (fun f -> writer.WriteBoolean("forceDownload", f))
         
         writer.WriteEndObject()
         writer.Flush()
@@ -498,10 +579,34 @@ module ProjectFile =
         writer.WriteStartObject()
         writer.WriteString("command", "export")
         
+        // Write data array
+        match project.Data with
+        | Some data when data.Length > 0 ->
+            writer.WritePropertyName("data")
+            writer.WriteStartArray()
+            for entry in data do
+                writer.WriteStartObject()
+                writer.WriteString("path", entry.Path)
+                match entry.Type with
+                | Some Opc -> writer.WriteString("type", "opc")
+                | Some Obj -> writer.WriteString("type", "obj")
+                | None -> ()  // Don't write type if it should be inferred
+                match entry.Transform with
+                | Some m -> writer.WriteString("transform", m.ToString())
+                | None -> ()
+                writer.WriteEndObject()
+            writer.WriteEndArray()
+        | _ -> ()
+        
         // Write required fields
-        project.DataDir |> Option.iter (fun d -> writer.WriteString("dataDir", d))
         project.Format |> Option.iter (fun f -> writer.WriteString("format", f))
         project.Out |> Option.iter (fun o -> writer.WriteString("out", o))
+        
+        // Write optional fields
+        project.Sftp |> Option.iter (fun s -> writer.WriteString("sftp", s))
+        project.BaseDir |> Option.iter (fun b -> writer.WriteString("baseDir", b))
+        project.ForceDownload |> Option.iter (fun f -> writer.WriteBoolean("forceDownload", f))
+        project.Verbose |> Option.iter (fun v -> writer.WriteBoolean("verbose", v))
         
         writer.WriteEndObject()
         writer.Flush()

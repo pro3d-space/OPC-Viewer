@@ -18,6 +18,7 @@ let tests =
                     BaseDir = None
                     BackgroundColor = None
                     Screenshots = None
+                    ForceDownload = None
                 }
                 Expect.equal config.Verbose (Some true) "Verbose should be set to true"
             }
@@ -32,6 +33,7 @@ let tests =
                     BaseDir = None
                     BackgroundColor = None
                     Screenshots = None
+                    ForceDownload = None
                 }
                 Expect.equal config.Verbose None "Verbose should be None"
             }
@@ -46,6 +48,7 @@ let tests =
                     BaseDir = None
                     BackgroundColor = None
                     Screenshots = None
+                    ForceDownload = None
                 }
                 Expect.isTrue (config.NoValue.IsNone) "NoValue should be None"
                 Expect.isTrue (config.Speed.IsNone) "Speed should be None"
@@ -67,6 +70,7 @@ let tests =
                     BaseDir = None
                     BackgroundColor = None
                     Screenshots = None
+                    ForceDownload = None
                 }
                 Expect.equal config.Data testData "Data array should match input"
                 Expect.equal config.Data.Length 2 "Data array should have 2 elements"
@@ -82,6 +86,8 @@ let tests =
                     BaseDir = None
                     BackgroundColor = None
                     Screenshots = None
+                    ForceDownload = None
+                    Verbose = None
                 }
                 Expect.equal config.Data.Length 0 "Empty data array should have length 0"
             }
@@ -95,6 +101,8 @@ let tests =
                     BaseDir = None
                     BackgroundColor = None
                     Screenshots = screenshotPath
+                    ForceDownload = None
+                    Verbose = None
                 }
                 Expect.equal config.Screenshots screenshotPath "Screenshots path should match"
             }

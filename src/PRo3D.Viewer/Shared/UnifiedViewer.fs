@@ -20,6 +20,7 @@ open PRo3D.Viewer.Shared.ViewerCommon
 open System
 open FShade
 open Aardvark.FontProvider
+open Uncodium.Geometry.TriangleSet
 
 // Font type for text overlays
 type DiffFont = GoogleFontProvider<"Roboto Mono">
@@ -200,7 +201,15 @@ module UnifiedViewer =
         let fillMode = cval FillMode.Fill
 
         // Setup common keyboard handlers
-        ViewerCommon.setupCommonKeyboardHandlers win speed lodVisEnabled fillMode
+        ViewerCommon.setupCommonKeyboardHandlers win speed fillMode
+        
+        // Add L-key handler only for View mode
+        match config.mode with
+        | ViewMode _ ->
+            win.Keyboard.KeyDown(Keys.L).Values.Add(fun _ -> 
+                transact (fun _ -> lodVisEnabled.Value <- not lodVisEnabled.Value)
+            )
+        | DiffMode _ -> () // L-key doesn't apply to diff mode (no LoD structure)
 
         // Setup custom keyboard handlers
         config.customKeyHandlers |> Map.iter (fun key handler ->
@@ -259,17 +268,22 @@ module UnifiedViewer =
                         do! stableTrafo
                         do! DefaultSurfaces.constantColor C4f.White 
                         do! DefaultSurfaces.diffuseTexture 
+                        do! LoDColor
                         do! noPick
                     }
+                    |> Sg.uniform "LodVisEnabled" lodVisEnabled
                 
-                // Combine scenes
-                let combinedScene = 
+                // Separate geometry (affected by wireframe) from overlays (always solid)
+                let geometryScene = 
                     opcSceneWithShaders
                     |> Sg.andAlso objSceneWithShaders
                     |> Sg.andAlso cursor
                     |> Sg.viewTrafo (view |> AVal.map CameraView.viewTrafo)
                     |> Sg.projTrafo (frustum |> AVal.map Frustum.projTrafo)
                     |> Sg.fillMode fillMode
+                
+                // Combine geometry with overlays (no fillMode applied to full scene)
+                let combinedScene = geometryScene
 
                 // Create offscreen buffer for view mode
                 let buffer = 
@@ -367,8 +381,10 @@ module UnifiedViewer =
                         let pp = viewProj.Backward.TransformPosProj(ndc)
                         let ray = Ray3d(view.Location, (pp - view.Location).Normalized)
                         
-                        let hit0 = TriangleTree.getNearestIntersection diffConfig.env.Tree0 ray
-                        let hit1 = TriangleTree.getNearestIntersection diffConfig.env.Tree1 ray
+                        let hit0Result = diffConfig.env.Tree0.IntersectRay(ray)
+                        let hit0 = if hit0Result.HasIntersection then Some(abs hit0Result.T, hit0Result.T) else None
+                        let hit1Result = diffConfig.env.Tree1.IntersectRay(ray)
+                        let hit1 = if hit1Result.HasIntersection then Some(abs hit1Result.T, hit1Result.T) else None
 
                         let (maybeT, isFirst) =
                             match hit0, hit1 with
@@ -395,9 +411,11 @@ module UnifiedViewer =
 
                             let otherHitPos =
                                 if isFirst then
-                                    TriangleTree.getNearestIntersection diffConfig.env.Tree1 skyRay
+                                    let hit = diffConfig.env.Tree1.IntersectRay(skyRay)
+                                    if hit.HasIntersection then Some(abs hit.T, hit.T) else None
                                 else
-                                    TriangleTree.getNearestIntersection diffConfig.env.Tree0 skyRay
+                                    let hit = diffConfig.env.Tree0.IntersectRay(skyRay)
+                                    if hit.HasIntersection then Some(abs hit.T, hit.T) else None
 
                             let distFromFirstToSecondLayer =
                                 match otherHitPos with
@@ -446,17 +464,22 @@ module UnifiedViewer =
                 let showFirst = toggleMode |> AVal.map (fun x -> match x with | First -> true | Second -> false)
                 let showSecond = toggleMode |> AVal.map (fun x -> match x with | First -> false | Second -> true)
 
-                // Combine scenes for diff mode
-                let combinedScene =
+                // Separate geometry from text overlay for diff mode
+                let geometryScene =
                     Sg.ofList [
                         Sg.onOff showFirst hierarchies[0]
                         Sg.onOff showSecond hierarchies[1]
-                        info
                     ]
                     |> Sg.andAlso cursor
+                
+                // Combine but keep info separate for now
+                let combinedScene = 
+                    geometryScene
+                    |> Sg.andAlso info
 
-                let sg = 
-                    combinedScene
+                // Apply wireframe only to geometry, not text
+                let geometryWithWireframe = 
+                    geometryScene
                     |> Sg.viewTrafo (view |> AVal.map CameraView.viewTrafo)
                     |> Sg.projTrafo (frustum |> AVal.map Frustum.projTrafo)
                     |> Sg.shader {
@@ -466,9 +489,13 @@ module UnifiedViewer =
                         do! DefaultSurfaces.diffuseTexture
                         do! showDistances
                     }
-                    |> Sg.uniform "LodVisEnabled" lodVisEnabled
                     |> Sg.uniform "ShowDistances" showDistancesEnabled
                     |> Sg.fillMode fillMode
+                
+                // Combine geometry with text overlay (text stays solid)
+                let sg = 
+                    geometryWithWireframe
+                    |> Sg.andAlso info
 
                 // Create offscreen buffer for diff mode
                 let buffer = 

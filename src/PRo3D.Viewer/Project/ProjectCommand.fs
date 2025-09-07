@@ -5,6 +5,7 @@ open System
 open System.IO
 open PRo3D.Viewer.Project
 open PRo3D.Viewer.Configuration
+open PRo3D.Viewer.Shared.ConfigurationUtils
 
 [<AutoOpen>]
 module ProjectCommand =
@@ -12,12 +13,14 @@ module ProjectCommand =
     type Args =
         | [<MainCommand>] ProjectFile of project_file: string
         | [<CustomCommandLine("--background-color"); AltCommandLine("--bg")>] BackgroundColor of string
+        | [<CustomCommandLine("--force-download"); AltCommandLine("-f")>] ForceDownload
 
         interface IArgParserTemplate with
             member s.Usage =
                 match s with
                 | ProjectFile _ -> "Path to JSON project file"
                 | BackgroundColor _ -> "optional background color (hex: #RGB/#RRGGBB, named: black/white/red/etc, RGB: r,g,b)"
+                | ForceDownload -> "force re-download of remote data even if cached"
 
     // These conversion functions have been removed - use ConfigurationBuilder instead
 
@@ -38,16 +41,9 @@ module ProjectCommand =
             // Build ViewConfig directly from the parsed project
             let baseConfig = ConfigurationBuilder.fromViewProject projectFileDir viewProject
             
-            // Override background color and screenshots if provided via CLI arguments
-            let config = 
-                let configWithBg = 
-                    match args.TryGetResult(Args.BackgroundColor) with
-                    | Some cliColor -> { baseConfig with BackgroundColor = Some cliColor }
-                    | None -> baseConfig
-                
-                match globalScreenshots with
-                | Some cliScreenshots -> { configWithBg with Screenshots = Some cliScreenshots }
-                | None -> configWithBg
+            // Override background color, screenshots, and force download if provided via CLI arguments
+            let forceDownloadOverride = if args.Contains Args.ForceDownload then Some true else None
+            let config = applyViewConfigOverrides baseConfig (args.TryGetResult(Args.BackgroundColor)) globalScreenshots forceDownloadOverride
             
             let hasData = 
                 config.Data.Length > 0
@@ -68,16 +64,9 @@ module ProjectCommand =
             // Build DiffConfig directly from the parsed project
             let baseConfig = ConfigurationBuilder.fromDiffProject projectFileDir diffProject
             
-            // Override background color and screenshots if provided via CLI arguments
-            let config = 
-                let configWithBg = 
-                    match args.TryGetResult(Args.BackgroundColor) with
-                    | Some cliColor -> { baseConfig with BackgroundColor = Some cliColor }
-                    | None -> baseConfig
-                
-                match globalScreenshots with
-                | Some cliScreenshots -> { configWithBg with Screenshots = Some cliScreenshots }
-                | None -> configWithBg
+            // Override background color, screenshots, and force download if provided via CLI arguments
+            let forceDownloadOverride = if args.Contains Args.ForceDownload then Some true else None
+            let config = applyDiffConfigOverrides baseConfig (args.TryGetResult(Args.BackgroundColor)) globalScreenshots forceDownloadOverride
             
             // Direct execution with clean configuration - no more args conversion!
             try
@@ -88,53 +77,27 @@ module ProjectCommand =
                 1
         
         | ProjectConfig.ListConfig listProject ->
-            // Build args from project for List command
-            let parser = ArgumentParser.Create<ListCommand.Args>()
+            // Build ListConfig directly from the parsed project
+            let baseConfig = ConfigurationBuilder.fromListProject projectFileDir listProject
+            
             try
-                let args = ResizeArray<string>()
-                
-                match listProject.Data with
-                | Some dirs -> args.AddRange(dirs)
-                | None -> ()
-                
-                match listProject.Stats with
-                | Some true -> args.Add("--stats")
-                | _ -> ()
-                
-                let parsedArgs = parser.Parse(args.ToArray(), ignoreUnrecognized = false)
-                ListCommand.run parsedArgs
+                ListCommand.execute baseConfig
             with
             | ex ->
                 printfn "[ERROR] Failed to execute list command: %s" ex.Message
                 1
         
         | ProjectConfig.ExportConfig exportProject ->
-            // Build args from project for Export command
-            let parser = ArgumentParser.Create<ExportCommand.Args>()
+            // Build ExportConfig directly from the parsed project
+            let baseConfig = ConfigurationBuilder.fromExportProject projectFileDir exportProject
+            
+            // Override background color, screenshots, and force download if provided via CLI arguments
+            let forceDownloadOverride = if args.Contains Args.ForceDownload then Some true else None
+            let config = applyExportConfigOverrides baseConfig (args.TryGetResult(Args.BackgroundColor)) globalScreenshots forceDownloadOverride
+            
+            // Direct execution with clean configuration
             try
-                let args = ResizeArray<string>()
-                
-                match exportProject.DataDir with
-                | Some dir -> args.Add(dir)
-                | None -> ()
-                
-                match exportProject.Format with
-                | Some "pts" -> 
-                    args.Add("--format")
-                    args.Add("Pts")
-                | Some "ply" -> 
-                    args.Add("--format")
-                    args.Add("Ply")
-                | _ -> ()
-                
-                match exportProject.Out with
-                | Some out -> 
-                    args.Add("--out")
-                    args.Add(out)
-                | None -> ()
-                
-                let parsedArgs = parser.Parse(args.ToArray(), ignoreUnrecognized = false)
-                ExportCommand.run parsedArgs
+                ExportCommand.execute config
             with
             | ex ->
                 printfn "[ERROR] Failed to execute export command: %s" ex.Message

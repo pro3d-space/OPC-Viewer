@@ -9,6 +9,7 @@ Aardvark.Application.Slim.GL
 Aardvark.Application.Slim.Vulkan
 Aardvark.Data.Opc
 Aardvark.Data.Wavefront
+Uncodium.Geometry.TriangleSet
 Aardvark.FontProvider
 Aardvark.GeoSpatial.Opc
 Aardvark.PixImage.Pfim

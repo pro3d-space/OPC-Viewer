@@ -8,6 +8,8 @@ open PRo3D.Viewer
 open PRo3D.Viewer.Data
 open PRo3D.Viewer.Configuration
 open PRo3D.Viewer.Shared
+open PRo3D.Viewer.Shared.CommandUtils
+open Aardvark.Data.Remote
 
 [<AutoOpen>]
 module ViewCommand =
@@ -19,6 +21,8 @@ module ViewCommand =
         | [<AltCommandLine("-b") >] BaseDir of string
         | [<CustomCommandLine("--obj"); AltCommandLine("-o")>] ObjFiles of string list
         | [<CustomCommandLine("--background-color"); AltCommandLine("--bg")>] BackgroundColor of string
+        | [<CustomCommandLine("--force-download"); AltCommandLine("-f")>] ForceDownload
+        | [<Unique;AltCommandLine("-v") >] Verbose
 
         interface IArgParserTemplate with
             member s.Usage =
@@ -29,6 +33,8 @@ module ViewCommand =
                 | BaseDir  _ -> "optional base directory for relative paths (default is ./data)"
                 | ObjFiles _ -> "optional OBJ files to load alongside OPC data"
                 | BackgroundColor _ -> "optional background color (hex: #RGB/#RRGGBB, named: black/white/red/etc, RGB: r,g,b)"
+                | ForceDownload -> "force re-download of remote data even if cached"
+                | Verbose -> "print more detailed info."
 
     let execute (config : ViewConfig) : int =
 
@@ -123,10 +129,10 @@ module ViewCommand =
         let hasErrors = 
             dataRefs |> List.exists (fun x ->
                 match x with
-                | AbsoluteDirRef(path, false) ->
+                | LocalDir(path, false) ->
                     printfn "[ERROR] directory does not exist: %s" path
                     true
-                | InvalidDataRef path ->
+                | Invalid path ->
                     printfn "[ERROR] invalid location: %s" path
                     true
                 | _ -> false
@@ -136,36 +142,23 @@ module ViewCommand =
             1
         else
 
-        let basedir =
-            match config.BaseDir with
-            | Some s -> s
-            | None -> System.IO.Path.Combine(System.Environment.CurrentDirectory, "data")
+        let basedir = resolveBaseDirectory config.BaseDir
 
-        let sftpServerConfig = config.Sftp |> Option.map Sftp.parseFileZillaConfigFile
+        let sftpServerConfig = parseSftpConfig config.Sftp
 
-        let resolve = Data.resolveDataPath basedir sftpServerConfig
-        let resolvedResults = dataRefs |> List.map resolve
-
-        let datadirResults = 
-            resolvedResults |> List.map (fun x ->
-                match x with
-                | ResolveDataPathResult.Ok ok -> Some ok
-                | ResolveDataPathResult.MissingSftpConfig uri ->
-                    printfn "Use --sftp|-s do specify SFTP config for %A" uri
-                    None
-                | ResolveDataPathResult.DownloadError (uri, e) ->
-                    printfn "%A: %A" uri e
-                    None
-                | ResolveDataPathResult.InvalidDataDir s ->
-                    printfn "invalid data dir: %A" s
-                    None
-            )
+        let forceDownload = config.ForceDownload |> Option.defaultValue false
         
-        if datadirResults |> List.exists Option.isNone then
-            1
-        else
-        
-        let datadirs = datadirResults |> List.choose id
+        // Create logger from verbose flag
+        let logger = 
+            match config.Verbose |> Option.defaultValue false with
+            | true -> Some (Logger.console Logger.Info)
+            | false -> None
+            
+        let resolvedResults = resolveDataPaths basedir sftpServerConfig forceDownload logger dataRefs
+
+        match handleResolveResults resolvedResults with
+        | None -> 1
+        | Some datadirs ->
             
         // discover all layers in datadirs (only if we have data directories) ...
         let layerInfos = 
@@ -243,15 +236,7 @@ module ViewCommand =
             }
 
         // Parse background color if provided
-        let backgroundColor = 
-            match config.BackgroundColor with
-            | Some colorStr ->
-                match Utils.parseBackgroundColor colorStr with
-                | Result.Ok color -> color
-                | Result.Error msg ->
-                    printfn "[WARNING] Invalid background color '%s': %s. Using default black." colorStr msg
-                    C4f.Black
-            | None -> C4f.Black
+        let backgroundColor = parseBackgroundColor config.BackgroundColor
 
         // ... and show it using the unified viewer
         let viewerConfig : ViewerConfig = {
@@ -294,5 +279,7 @@ module ViewCommand =
             BaseDir = args.TryGetResult Args.BaseDir
             BackgroundColor = args.TryGetResult Args.BackgroundColor
             Screenshots = globalScreenshots
+            ForceDownload = if args.Contains Args.ForceDownload then Some true else None
+            Verbose = if args.Contains Args.Verbose then Some true else None
         }
         execute config

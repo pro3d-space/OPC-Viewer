@@ -32,6 +32,7 @@ nuget Aardvark.Base.FSharp              ~> 5.3.4
 
 nuget Aardvark.Data.Opc                 ~> 0.11.0
 nuget Aardvark.Data.Wavefront           ~> 5.3.0
+nuget Uncodium.Geometry.TriangleSet
 
 nuget Aardvark.Dom.Core                 ~> 1.0.5
 nuget Aardvark.Dom.Elm                  ~> 1.0.5

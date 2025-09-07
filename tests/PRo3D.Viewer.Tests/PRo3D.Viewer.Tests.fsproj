@@ -7,6 +7,11 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="ConfigurationTests.fs" />
+    <Compile Include="ExportTests.fs" />
+    <Compile Include="ExportCommandTests.fs" />
+    <Compile Include="ListTests.fs" />
+    <Compile Include="ListConfigurationBuilderTests.fs" />
+    <Compile Include="ListCommandTests.fs" />
     <Compile Include="ProjectFileTests.fs" />
     <Compile Include="ScreenshotTests.fs" />
     <Compile Include="IntegrationTests.fs" />

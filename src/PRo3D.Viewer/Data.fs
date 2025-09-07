@@ -2,9 +2,9 @@
 
 open System
 open System.IO
-open System.IO.Compression
 open System.Text.Json.Serialization
 open System.Text.Json
+open Aardvark.Data.Remote
 
 [<AutoOpen>]
 module Data =
@@ -25,128 +25,48 @@ module Data =
                 printfn "[ERROR] directory does not exist (%s)" path
                 exit 1
 
-    type DataRef =
-        | AbsoluteDirRef of string * exists : bool 
-        | RelativeDirRef of string
-        | AbsoluteZipRef of string 
-        | RelativeZipRef of string
-        | HttpZipRef of Uri
-        | SftpZipRef of Uri
-        | InvalidDataRef of string
+    // Compatibility layer - use Aardvark.Data.Remote types but maintain old naming
+    type DataRef = Aardvark.Data.Remote.DataRef
 
-    let getDataRefFromString s : DataRef =
-
-        let handleAbsolutePath (s : string) : DataRef =
-            if Directory.Exists s then
-                AbsoluteDirRef (s, true)
-            else
-                if Path.HasExtension s && Path.GetExtension(s).ToLowerInvariant() = ".zip" then
-                    AbsoluteZipRef s
-                else
-                    AbsoluteDirRef (s, false)
-
-        let handleRelativePath (s : string) : DataRef =
-            if Path.HasExtension s && Path.GetExtension(s).ToLowerInvariant() = ".zip" then
-                    RelativeZipRef s
-                else
-                    RelativeDirRef s
-
-        let isZip (uri : Uri) : bool =
-            let s = uri.AbsolutePath
-            Path.HasExtension s && Path.GetExtension(s).ToLowerInvariant() = ".zip" 
-
-        try
-            let uri = Uri(s)
-            match uri.Scheme.ToLowerInvariant() with
-            | "http" -> HttpZipRef uri
-            | "https" -> if isZip uri then HttpZipRef uri else InvalidDataRef s
-            | "sftp" -> if isZip uri then SftpZipRef uri else InvalidDataRef s
-            | "file" -> handleAbsolutePath s
-            | _ -> InvalidDataRef s
-        with
-        | _ ->
-            if Path.IsPathRooted(s) then
-                handleAbsolutePath s
-            elif Path.GetInvalidPathChars() |> Array.exists (fun c -> s.Contains(c)) then
-                InvalidDataRef s
-            else
-                handleRelativePath s
+    // Use the new library's parser
+    let getDataRefFromString s : DataRef = Parser.parse s
       
+    // Compatibility result type
     type ResolveDataPathResult =
         | Ok of DataDir
         | DownloadError of Uri * Exception
         | MissingSftpConfig of Uri
         | InvalidDataDir of string
 
-    let resolveDataPath (basedir : string) (sftp : Sftp.SftpServerConfig option) (x : DataRef) : ResolveDataPathResult =
-    
-        let removeExtension (path : string) =
-            if Path.HasExtension path then
-                Path.Combine(Path.GetDirectoryName(path), Path.GetFileNameWithoutExtension(path))
-            else path
-
-        let handleZipFile (path : string) =
-            let targetPath = path |> removeExtension
-            if not (Directory.Exists(targetPath)) then
-                Directory.CreateDirectory(targetPath) |> ignore
-                ZipFile.ExtractToDirectory(path, targetPath)
-            Ok (DataDir targetPath)
-
-        match x with
+    // Use the new library with compatibility wrapper
+    let resolveDataPath (basedir : string) (sftp : Aardvark.Data.Remote.SftpConfig option) (forceDownload : bool) (logger : Aardvark.Data.Remote.Logger.LogCallback option) (x : DataRef) : ResolveDataPathResult =
         
-        | AbsoluteDirRef (path, true) ->
-            Ok (DataDir path)
+        // Initialize providers
+        Resolver.initializeDefaultProviders()
         
-        | AbsoluteDirRef (path, false) ->
-            let info = Directory.CreateDirectory(path)
-            Ok (DataDir info.FullName)
+        // Create configuration - sftp is already in correct format
         
-        | RelativeDirRef pathRel ->
-            let path = Path.Combine(basedir, pathRel)
-            let info = Directory.CreateDirectory(path)
-            Ok (DataDir info.FullName)
+        let config = { 
+            ResolverConfig.Default with 
+                BaseDirectory = basedir
+                SftpConfig = sftp
+                ForceDownload = forceDownload
+                Logger = logger
+                ProgressCallback = Some (fun percent -> 
+                    printf "\r%.2f%%" percent
+                    if percent >= 100.0 then printfn "" else System.Console.Out.Flush()
+                )
+        }
         
-        | AbsoluteZipRef path ->
-            handleZipFile path
+        // Resolve using new library
+        let result = Resolver.resolve config x
         
-        | RelativeZipRef pathRel ->
-            let path = Path.Combine(basedir, pathRel)
-            handleZipFile path
-
-        | HttpZipRef uri ->
-            try
-                // Validate path to prevent directory traversal
-                let relPath = uri.AbsolutePath.Substring(1).Replace("..", "").Replace("~", "")
-                let targetPath = Path.GetFullPath(Path.Combine(basedir, relPath))
-                
-                // Ensure target path is within basedir
-                if not (targetPath.StartsWith(Path.GetFullPath(basedir))) then
-                    InvalidDataDir (sprintf "Path traversal detected: %s" targetPath)
-                else
-                let targetPath = targetPath  // Continue with validated path
-                if not (File.Exists(targetPath)) then
-                    let targetDir = Path.GetDirectoryName(targetPath)
-                    if not (Directory.Exists(targetDir)) then
-                        Directory.CreateDirectory(targetDir) |> ignore
-                    Utils.downloadFileAsync uri targetPath |> Async.RunSynchronously
-                handleZipFile targetPath
-            with
-            | e ->
-                DownloadError (uri, e)
-
-        | SftpZipRef uri ->
-            match sftp with
-            | Some sftp ->
-                sftp.DownloadFile(uri, basedir, printfn "%s")
-            
-                let relPath = uri.AbsolutePath.Substring(1)
-                let target = Path.Combine(basedir, relPath)
-                handleZipFile target
-            | None ->
-                MissingSftpConfig uri
-        
-        | InvalidDataRef s ->
-            InvalidDataDir s
+        // Convert result to old format
+        match result with
+        | Aardvark.Data.Remote.Resolved path -> ResolveDataPathResult.Ok (DataDir path)
+        | Aardvark.Data.Remote.InvalidPath reason -> ResolveDataPathResult.InvalidDataDir reason
+        | Aardvark.Data.Remote.SftpConfigMissing uri -> ResolveDataPathResult.MissingSftpConfig uri
+        | Aardvark.Data.Remote.DownloadError (uri, ex) -> ResolveDataPathResult.DownloadError (uri, ex)
 
     
     let private (+/) path1 path2 = Path.Combine(path1, path2)

@@ -10,18 +10,19 @@
     <Compile Include="Shared\SharedShaders.fs" />
     <Compile Include="Shared\ViewerCommon.fs" />
     <Compile Include="Utils.fs" />
-    <Compile Include="Sftp.fs" />
     <Compile Include="Data.fs" />
-    <Compile Include="TriangleTree.fs" />
     <Compile Include="Diff\DiffInfo.fs" />
     <Compile Include="Diff\DiffRendering.fs" />
+    <Compile Include="Project\ProjectFile.fs" />
+    <Compile Include="Configuration.fs" />
     <Compile Include="Export\ExportCommand.fs" />
     <Compile Include="List\ListCommand.fs" />
     <Compile Include="View\OpcRendering.fs" />
     <Compile Include="Shared\UnifiedViewer.fs" />
     <Compile Include="OpcDataProcessing.fs" />
-    <Compile Include="Project\ProjectFile.fs" />
-    <Compile Include="Configuration.fs" />
+    <Compile Include="Shared\PathUtils.fs" />
+    <Compile Include="Shared\CommandUtils.fs" />
+    <Compile Include="Shared\ConfigurationUtils.fs" />
     <Compile Include="View\ViewCommand.fs" />
     <Compile Include="Diff\DiffCommand.fs" />
     <Compile Include="ConfigurationBuilder.fs" />
@@ -29,6 +30,9 @@
     <Compile Include="Usage.fs" />
     <Compile Include="Project\DryRunSerializer.fs" />
     <Compile Include="Program.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Aardvark.Data.Remote\src\Aardvark.Data.Remote\Aardvark.Data.Remote.fsproj" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>
