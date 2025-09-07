@@ -52,6 +52,10 @@ module Configuration =
     
     /// Configuration for the List command
     type ListConfig = {
-        DataDir: string
+        Data: string array
+        Stats: bool option
         Sftp: string option
+        BaseDir: string option
+        ForceDownload: bool option
+        Verbose: bool option
     }

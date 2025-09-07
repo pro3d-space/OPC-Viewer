@@ -63,6 +63,15 @@ D:\Pro3D\VictoriaCrater\HiRISE_VictoriaCrater\OPC_000_002
 ...
 ```
 
+List command also supports remote data sources:
+```
+# List multiple directories including remote sources
+$ pro3dviewer ls ./local_data http://server.com/data.zip
+
+# List with JSON project file (supports all remote features)
+$ pro3dviewer project list_config.json
+```
+
 ## View
 
 View OPC datasets and OBJ models.
@@ -141,6 +150,32 @@ pro3dviewer config.json
 pro3dviewer config.json -f  # Force re-download and re-extract cached remote data
 ```
 
+### Unified Data Array Format
+
+All commands (view, diff, export) use a unified `data` array format:
+
+```json
+{
+  "data": [
+    { "path": "local/directory", "type": "opc" },
+    { "path": "model.obj", "type": "obj" },
+    { "path": "http://server.com/data.zip" },
+    { "path": "sftp://user@server/data.zip" }
+  ]
+}
+```
+
+**Data Entry Properties:**
+- `path` (required): File path, directory, or URL
+- `type` (optional): "opc" or "obj" (auto-inferred from file extension)
+- `transform` (optional): 4x4 transformation matrix as string
+
+**Path Types Supported:**
+- Local directories: `./data`, `C:\Data`  
+- Local files: `model.obj`, `data.zip`
+- HTTP/HTTPS URLs: `https://server.com/data.zip`
+- SFTP URLs: `sftp://user@server.com/path/data.zip`
+
 ### View Project
 
 ```json
@@ -199,9 +234,15 @@ With transformations:
 ```json
 {
   "command": "export",
-  "dataDir": "dataset",
+  "data": [
+    { "path": "dataset1", "type": "opc" },
+    { "path": "dataset2", "type": "opc" }
+  ],
   "format": "pts",
-  "out": "output.pts"
+  "out": "output.pts",
+  "verbose": true,
+  "forceDownload": false,
+  "sftp": "path/to/config.xml"
 }
 ```
 

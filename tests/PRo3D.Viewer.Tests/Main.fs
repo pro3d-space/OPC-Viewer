@@ -8,6 +8,9 @@ let allTests =
         ScreenshotTests.tests
         ExportTests.tests
         ExportCommandTests.tests
+        ListTests.tests
+        ListConfigurationBuilderTests.tests
+        ListCommandTests.tests
         // ProjectFileTests and IntegrationTests removed due to API complexity
     ]
 
