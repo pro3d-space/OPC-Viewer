@@ -77,21 +77,11 @@ module ProjectCommand =
                 1
         
         | ProjectConfig.ListConfig listProject ->
-            // Build args from project for List command
-            let parser = ArgumentParser.Create<ListCommand.Args>()
+            // Build ListConfig directly from the parsed project
+            let baseConfig = ConfigurationBuilder.fromListProject projectFileDir listProject
+            
             try
-                let args = ResizeArray<string>()
-                
-                match listProject.Data with
-                | Some dirs -> args.AddRange(dirs)
-                | None -> ()
-                
-                match listProject.Stats with
-                | Some true -> args.Add("--stats")
-                | _ -> ()
-                
-                let parsedArgs = parser.Parse(args.ToArray(), ignoreUnrecognized = false)
-                ListCommand.run parsedArgs
+                ListCommand.execute baseConfig
             with
             | ex ->
                 printfn "[ERROR] Failed to execute list command: %s" ex.Message

@@ -1,3 +1,12 @@
+## 1.1.2
+- Implemented remote data support for list command 
+- Added configuration-based execution pattern to list command (matches view/diff/export)
+- List command now supports HTTP/HTTPS URLs and SFTP sources with authentication
+- List command supports multiple directories and remote sources in single operation
+- Fixed README documentation for export JSON format (now uses unified `data` array)
+- Added comprehensive documentation for unified data array format across all commands
+- Updated list command to support all remote data features (verbose logging, force download, base directory)
+
 ## 1.1.1
 - Removed experimental GoldenLayout web interface code that was accidentally mixed with legitimate features
 - Replaced custom TriangleTree with optimized Uncodium.Geometry.TriangleSet library

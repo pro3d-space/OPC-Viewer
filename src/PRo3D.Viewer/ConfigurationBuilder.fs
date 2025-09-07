@@ -172,3 +172,40 @@ module ConfigurationBuilder =
             ForceDownload = project.ForceDownload
             Verbose = project.Verbose
         }
+    
+    /// Build ListConfig from command-line arguments
+    let fromListArgs (args: ParseResults<ListCommand.Args>) : ListConfig =
+        let data = 
+            match args.TryGetResult ListCommand.Args.DataDirs with
+            | Some dirs -> dirs |> List.toArray
+            | None -> [||]
+        
+        let stats = if args.Contains ListCommand.Args.Stats then Some true else None
+        
+        {
+            Data = data
+            Stats = stats
+            Sftp = None  // Not available in current CLI args
+            BaseDir = None  // Not available in current CLI args
+            ForceDownload = None  // Not available in current CLI args
+            Verbose = None  // Not available in current CLI args
+        }
+    
+    /// Build ListConfig from parsed JSON project
+    let fromListProject (projectDir: string) (project: ListProject) : ListConfig =
+        // Resolve paths relative to project file directory
+        let resolvePath = resolveProjectPath projectDir
+        
+        let data =
+            project.Data
+            |> Option.map (Array.map resolvePath)
+            |> Option.defaultValue [||]
+        
+        {
+            Data = data
+            Stats = project.Stats
+            Sftp = None  // Will be added when ListProject supports SFTP
+            BaseDir = None  // Will be added when ListProject supports BaseDir
+            ForceDownload = None  // Will be added when ListProject supports ForceDownload
+            Verbose = None  // Will be added when ListProject supports Verbose
+        }
