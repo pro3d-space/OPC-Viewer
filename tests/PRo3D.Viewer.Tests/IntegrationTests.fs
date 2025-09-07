@@ -21,6 +21,7 @@ let tests =
                     BaseDir = Some "/base/dir"
                     BackgroundColor = Some "red"
                     Screenshots = Some "/screenshots"
+                    ForceDownload = Some true
                 }
                 
                 // Verify all fields are properly set
@@ -96,6 +97,7 @@ let tests =
                         BaseDir = Some "/absolute/base"
                         BackgroundColor = None
                         Screenshots = Some "./relative-screenshots"
+                        ForceDownload = None
                     }
                     
                     let config = PRo3D.Viewer.ConfigurationBuilder.fromDiffProject projectDir project
@@ -124,6 +126,7 @@ let tests =
                     BaseDir = None
                     BackgroundColor = None
                     Screenshots = Some "/test"
+                    ForceDownload = None
                 }
                 
                 let viewConfig : ViewConfig = {
@@ -133,6 +136,8 @@ let tests =
                     BaseDir = None
                     BackgroundColor = None
                     Screenshots = Some "/test"
+                    ForceDownload = None
+                    Verbose = None
                 }
                 
                 // Both should have Screenshots field with same value
@@ -149,6 +154,7 @@ let tests =
                     BaseDir = None
                     BackgroundColor = None
                     Screenshots = None
+                    ForceDownload = None
                 }
                 
                 let viewConfig : ViewConfig = {
@@ -158,6 +164,8 @@ let tests =
                     BaseDir = None
                     BackgroundColor = None
                     Screenshots = None
+                    ForceDownload = None
+                    Verbose = None
                 }
                 
                 // Common fields should behave the same

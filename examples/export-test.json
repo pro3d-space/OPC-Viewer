@@ -1,0 +1,18 @@
+{
+    "command": "export",
+    "data": [
+        {
+            "path": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0610/8618/Job_0610_8618-110-rad-AI-Test_opc.zip",
+            "type": "opc"
+        },
+        {
+            "path": "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0610/8618/Job_0610_8618-110-rad-NoAI_opc.zip",
+            "type": "opc"
+        }
+    ],
+    "format": "ply",
+    "out": "C:\\Data\\Development\\Uncodium.Geometry.TriangleSet\\ai\\data\\combined-export.ply",
+    "sftp": "W:\\Datasets\\Pro3D\\confidential\\2025-02-24_AI-Mars-3D\\Mastcam-Z.xml",
+    "forceDownload": false,
+    "verbose": true
+}

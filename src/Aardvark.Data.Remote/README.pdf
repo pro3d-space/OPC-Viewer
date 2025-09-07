@@ -1,0 +1,292 @@
+README.md                                                                              2025-09-01
+
+Aardvark.Data.Remote
+
+A .NET library for resolving remote and local data references with support for HTTP/HTTPS, SFTP, and local file
+system access. Designed for use with Mars exploration datasets and other large scientific data collections.
+
+Features
+
+        Multiple Protocol Support: Local file system, HTTP/HTTPS downloads, SFTP transfers
+        Automatic Zip Extraction: Seamless handling of compressed datasets
+        Smart Caching: Local caching of remote files to avoid re-downloads
+        Progress Reporting: Built-in progress callbacks for long-running operations
+        Fluent API: Developer-friendly builder pattern for configuration
+        Type Safety: F# discriminated unions ensure compile-time correctness
+        Extensible: Provider pattern allows adding new protocols
+
+Quick Start
+
+     open Aardvark.Data.Remote
+
+     // Simple usage
+     let result = DataRefBuilder.Resolve "/path/to/data"
+
+     // With configuration
+     let result =
+
+           DataRefBuilder
+                  .From("http://example.com/dataset.zip")
+                  .WithBaseDirectory("/cache")
+                  .WithProgress(printfn "Progress: %.1f%%")
+                  .Resolve()
+
+     match result with
+     | Resolved path -> printfn "Data available at: %s" path
+     | InvalidPath reason -> printfn "Error: %s" reason
+     | DownloadError (uri, ex) -> printfn "Download failed: %s" ex.Message
+     | SftpConfigMissing uri -> printfn "SFTP config required for: %A" uri
+
+Supported Data References
+
+Local File System
+
+        Absolute directories: /path/to/dataset
+        Relative directories: relative/path
+        Zip files: /path/to/dataset.zip or relative/dataset.zip
+
+Remote Downloads
+
+        HTTP/HTTPS: http://example.com/dataset.zip
+
+                                                                                  1/6
+README.md                                                                              2025-09-01
+
+          SFTP: sftp://user@server.com/dataset.zip
+
+ Invalid References
+
+          Invalid paths are automatically detected and reported
+
+ Configuration Options
+
+let config = {                                                                          // Base directory for relative paths
+      BaseDirectory = "/data/cache"                                                    // SFTP connection details
+      SftpConfig = Some sftpConfig                                                     // Retry attempts for downloads
+      MaxRetries = 3                                                                   // Operation timeout
+      Timeout = TimeSpan.FromMinutes(10.0)                                             // Progress reporting
+      ProgressCallback = Some progressFn
+
+}
+
+API Styles
+
+Idiomatic F# Pipeline API
+
+open Aardvark.Data.Remote
+
+// Functional pipeline style
+let result =
+
+      "http://example.com/dataset.zip"
+      |> DataRefPipeline.from
+      |> DataRefPipeline.configure
+      |> DataRefPipeline.withBaseDirectory "/cache"
+      |> DataRefPipeline.withConsoleProgress
+      |> DataRefPipeline.withMaxRetries 5
+      |> DataRefPipeline.resolve
+
+// Quick resolution
+let quickResult =
+
+      "http://example.com/dataset.zip"
+      |> DataRefPipeline.from
+      |> DataRefPipeline.resolveDefault
+
+// With SFTP config file
+let sftpResult =
+
+      "sftp://server.com/data.zip"
+      |> DataRefPipeline.from
+      |> DataRefPipeline.configure
+      |> DataRefPipeline.withSftpConfigFile "/path/to/filezilla.xml"
+      |> DataRefPipeline.resolve
+
+C# Interop Builder Pattern
+
+                                                                                  2/6
+README.md                                                                                2025-09-01
+
+      // Builder pattern for C# compatibility
+      let result =
+
+             DataRefBuilder
+                    .From("http://example.com/dataset.zip")
+                    .WithBaseDirectory("/cache")
+                    .WithProgress(printfn "Progress: %.1f%%")
+                    .Resolve()
+
+ SFTP Configuration
+
+ SFTP support requires connection details:
+
+      let sftpConfig = {
+             Host = "sftp.example.com"
+             Port = 22
+             User = "username"
+             Pass = "password"
+
+      }
+
+      let result =
+             DataRefBuilder
+                    .From("sftp://user@server.com/dataset.zip")
+                    .WithSftpConfig(sftpConfig)
+                    .Resolve()
+
+ FileZilla Configuration
+
+ The library can read SFTP settings from FileZilla configuration files:
+
+      let result =
+             DataRefBuilder
+                    .From("sftp://server.com/dataset.zip")
+                    .WithSftpConfigFile("/path/to/filezilla.xml")
+                    .Resolve()
+
+ Progress Reporting
+
+ Multiple progress reporting options are available:
+
+      // Simple progress (percentage only)
+      let builder =
+
+             DataRefBuilder
+                    .From("http://example.com/large-dataset.zip")
+                    .WithProgress(fun percent -> printfn "%.1f%% complete" percent)
+
+      // Console progress (built-in)
+
+                                                                                    3/6
+README.md                                                                              2025-09-01
+
+let builder =
+      DataRefBuilder
+             .From("http://example.com/dataset.zip")
+             .WithConsoleProgress()
+
+// Detailed progress information
+let detailedProgress = fun (info: ProgressInfo) ->
+
+      printfn "[%s] %s: %.1f%%"
+             (info.DataRef |> Option.map Parser.describe |> Option.defaultValue
+
+"Operation")
+             info.Operation
+             info.Percentage
+
+let builder =
+      DataRefBuilder
+             .From("http://example.com/dataset.zip")
+             .WithDetailedProgress(detailedProgress)
+
+Advanced Usage
+
+Manual Resolution
+
+     // Parse data reference
+     let dataRef = Parser.parse "http://example.com/dataset.zip"
+
+     // Check if valid
+     let isValid = Parser.isValid dataRef
+
+     // Get description
+     let description = Parser.describe dataRef
+
+     // Resolve with custom config
+     let result = Resolver.resolve config dataRef
+
+Batch Processing
+
+     let inputs = [
+           "/local/dataset1"
+           "http://example.com/dataset2.zip"
+           "sftp://server.com/dataset3.zip"
+
+     ]
+
+     let results = DataRefBuilder.ResolveMany inputs |> Async.AwaitTask |>
+     Async.RunSynchronously
+
+     for (input, result) in results do
+           match result with
+           | Resolved path -> printfn "%s -> %s" input path
+           | InvalidPath reason -> printfn "%s: ERROR - %s" input reason
+
+                                                                                  4/6
+README.md                                                                                             2025-09-01
+
+Custom Providers
+
+The library uses an extensible provider system:
+
+     // Custom provider implementation
+     type MyCustomProvider() =
+
+           interface IDataProvider with
+                  member _.CanHandle(dataRef) =
+                         // Return true if this provider can handle the DataRef
+                         false
+
+                  member _.ResolveAsync(config, dataRef) =
+                         // Implement custom resolution logic
+                         task { return InvalidPath "Not implemented" }
+
+     // Register custom provider
+     let provider = MyCustomProvider() :> IDataProvider
+     ProviderRegistry.register provider
+
+Error Handling
+
+The library uses discriminated unions for type-safe error handling:
+
+     match result with
+     | Resolved path ->
+
+           // Success: data available at local path
+           processDataset path
+
+     | InvalidPath reason ->
+           // Invalid data reference or parsing error
+           log.Error("Invalid path: {reason}", reason)
+
+     | DownloadError (uri, exception) ->
+           // Network or download error
+           log.Error("Download failed from {uri}: {error}", uri, exception.Message)
+
+     | SftpConfigMissing uri ->
+           // SFTP connection details not provided
+           log.Warning("SFTP configuration required for {uri}", uri)
+
+Integration with PRo3D.Viewer
+
+This library was extracted from PRo3D.Viewer and maintains full backward compatibility. The original
+resolveDataPath function is now a thin wrapper around the new library:
+
+           5/6
+README.md                                                      2025-09-01
+
+      // Old PRo3D.Viewer usage (still works)
+      let result = resolveDataPath basedir sftpConfig dataRef
+
+      // New library usage (more features)
+      let result =
+
+             DataRefBuilder
+                    .fromParsed(dataRef)
+                    .WithBaseDirectory(basedir)
+                    .WithSftpConfig(sftpConfig)
+                    .Resolve()
+
+Requirements
+
+        .NET 8.0
+        F# 6.0+
+        Dependencies: SSH.NET (for SFTP), System.Text.Json
+
+License
+
+This library was developed as part of the PRo3D.Viewer project for Mars exploration data visualization.
+
+6/6
+
