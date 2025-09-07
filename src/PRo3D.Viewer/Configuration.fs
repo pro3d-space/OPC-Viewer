@@ -17,6 +17,8 @@ module Configuration =
         BaseDir: string option
         BackgroundColor: string option
         Screenshots: string option
+        ForceDownload: bool option
+        Verbose: bool option
     }
     
     /// Configuration for the Diff command
@@ -29,6 +31,7 @@ module Configuration =
         BaseDir: string option
         BackgroundColor: string option
         Screenshots: string option
+        ForceDownload: bool option
     }
     
     /// Export format options
@@ -38,15 +41,21 @@ module Configuration =
     
     /// Configuration for the Export command
     type ExportConfig = {
-        DataDir: string
+        Data: DataEntry array
         Format: ExportFormat
         OutFile: string option
         Sftp: string option
         BaseDir: string option
+        ForceDownload: bool option
+        Verbose: bool option
     }
     
     /// Configuration for the List command
     type ListConfig = {
-        DataDir: string
+        Data: string array
+        Stats: bool option
         Sftp: string option
+        BaseDir: string option
+        ForceDownload: bool option
+        Verbose: bool option
     }

@@ -115,6 +115,7 @@ let tests =
                         BaseDir = Some "./base"
                         BackgroundColor = Some "blue"
                         Screenshots = Some "./screenshots"
+                        ForceDownload = Some true
                     }
                     
                     let config = PRo3D.Viewer.ConfigurationBuilder.fromDiffProject projectDir project

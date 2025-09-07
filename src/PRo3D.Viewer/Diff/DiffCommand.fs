@@ -4,11 +4,14 @@ open Argu
 open Aardvark.Base
 open Aardvark.GeoSpatial.Opc
 open System.Collections.Generic
+open Uncodium.Geometry.TriangleSet
 open System.Diagnostics
 open System.IO
 open PRo3D.Viewer.Configuration
 open PRo3D.Viewer.Diff
 open PRo3D.Viewer.Shared
+open PRo3D.Viewer.Shared.CommandUtils
+open Aardvark.Data.Remote
 
 [<AutoOpen>]
 module DiffCommand =
@@ -21,6 +24,7 @@ module DiffCommand =
         | [<AltCommandLine("-s")        >] Sftp of string
         | [<AltCommandLine("-b")        >] BaseDir of string
         | [<CustomCommandLine("--background-color"); AltCommandLine("--bg")>] BackgroundColor of string
+        | [<CustomCommandLine("--force-download"); AltCommandLine("-f")>] ForceDownload
 
         interface IArgParserTemplate with
             member s.Usage =
@@ -32,6 +36,7 @@ module DiffCommand =
                 | Sftp     _ -> "optional SFTP server config file (FileZilla format)"
                 | BaseDir  _ -> "optional base directory for relative paths (default is ./data)"
                 | BackgroundColor _ -> "optional background color (hex: #RGB/#RRGGBB, named: black/white/red/etc, RGB: r,g,b)"
+                | ForceDownload -> "force re-download of remote data even if cached"
 
     let execute (config : DiffConfig) : int =
 
@@ -39,65 +44,67 @@ module DiffCommand =
 
         let verbose = config.Verbose |> Option.defaultValue false
 
-        let sftpServerConfig = config.Sftp |> Option.map Sftp.parseFileZillaConfigFile
+        let sftpServerConfig = parseSftpConfig config.Sftp
 
-        let basedir =
-            match config.BaseDir with
-            | Some s -> s
-            | None -> System.IO.Path.Combine(System.Environment.CurrentDirectory, "data")
+        let basedir = resolveBaseDirectory config.BaseDir
 
         let datadirs = config.Data |> Array.toList
 
         let dataRefs = datadirs |> List.map Data.getDataRefFromString
 
-        let resolve = Data.resolveDataPath basedir sftpServerConfig
-        let resolvedResults = dataRefs |> List.map resolve
+        let forceDownload = config.ForceDownload |> Option.defaultValue false
+        
+        // Create logger from verbose flag
+        let logger = 
+            match config.Verbose |> Option.defaultValue false with
+            | true -> Some (Logger.console Logger.Info)
+            | false -> None
+            
+        let resolvedResults = resolveDataPaths basedir sftpServerConfig forceDownload logger dataRefs
 
         // Check for empty data directories first
         if datadirs.IsEmpty then
             0
         else
         
-        let datadirResults = 
-            resolvedResults |> List.map (fun x ->
-                match x with
-                | ResolveDataPathResult.Ok ok -> Some ok
-                | ResolveDataPathResult.MissingSftpConfig uri ->
-                    printfn "Use --sftp|-s do specify SFTP config for %A" uri
-                    None
-                | ResolveDataPathResult.DownloadError (uri, e) ->
-                    printfn "%A: %A" uri e
-                    None
-                | ResolveDataPathResult.InvalidDataDir s ->
-                    printfn "invalid data dir: %A" s
-                    None
-            )
-        
-        if datadirResults |> List.exists Option.isNone then
-            1
-        else
-        
-        let datadirs = datadirResults |> List.choose id
+        match handleResolveResults resolvedResults with
+        | None -> 1
+        | Some datadirs ->
 
-        let layers = datadirs |> List.collect Data.searchLayerDir
+        let layersByDataDir = datadirs |> List.map Data.searchLayerDir
 
-        if layers.Length <> 2 then
+        // Check that we have exactly 2 data directories
+        if datadirs.Length <> 2 then
             printfn "[ERROR] Please specify exactly 2 datasets to compare."
-            printfn "[ERROR] You specified:"
-            for layer in layers do
-                printfn "[ERROR]   %s" layer.Path.FullName
+            printfn "[ERROR] You specified %d data directories" datadirs.Length
+            1
+        // Check that each directory contains at least one layer
+        elif layersByDataDir |> List.exists List.isEmpty then
+            printfn "[ERROR] One or more data directories contain no OPC layers."
+            for (datadir, layers) in List.zip datadirs layersByDataDir do
+                let (Data.DataDir path) = datadir
+                if layers.IsEmpty then
+                    printfn "[ERROR]   No layers found in: %s" path
             1
         else
 
-        let layerMain = layers[0]
-        let layerOther = layers[1]
-            
+        // Take the first layer from each directory for comparison
+        let layerMain = layersByDataDir.[0].[0]
+        let layerOther = layersByDataDir.[1].[0]
+        
+        // Log what we're comparing if verbose
         if verbose then
-            printfn "computing difference between"
-            printfn "  %s" layerMain.Path.FullName
-            printfn "  %s" layerOther.Path.FullName
+            printfn "Found layers:"
+            for (i, (datadir, layers)) in List.zip datadirs layersByDataDir |> List.indexed do
+                let (Data.DataDir path) = datadir
+                printfn "  Directory %d (%s): %d layers" i path layers.Length
+                for layer in layers do
+                    printfn "    - %s" layer.Path.FullName
+            printfn ""
+            printfn "Computing difference between:"
+            printfn "  Main:  %s" layerMain.Path.FullName  
+            printfn "  Other: %s" layerOther.Path.FullName
             printfn "novalue: %f" novalue
-            printfn "verbose: true"
 
         let hierarchyMain = layerMain.LoadPatchHierarchy ()
         let hierarchyOther = layerOther.LoadPatchHierarchy ()
@@ -132,8 +139,8 @@ module DiffCommand =
         //    exit 1
         //    ()
 
-        let triangleTreeMain  = TriangleTree.build trianglesMain
-        let triangleTreeOther = TriangleTree.build trianglesOther
+        let triangleTreeMain  = TriangleSet3d(trianglesMain, options = BVHOptions.Default)
+        let triangleTreeOther = TriangleSet3d(trianglesOther, options = BVHOptions.Default)
         sw.Stop()
         printfn "building tree ......... %A" sw.Elapsed
 
@@ -149,7 +156,8 @@ module DiffCommand =
         for pGlobal in pointsMain do
 
             let ray = Ray3d(pGlobal, sky)
-            let x = TriangleTree.getNearestIntersection triangleTreeOther ray
+            let hit = triangleTreeOther.IntersectRay(ray)
+            let x = if hit.HasIntersection then Some(abs hit.T, hit.T) else None
             
             i <- i + 1
 
@@ -243,7 +251,8 @@ module DiffCommand =
                 | _ ->
 
                     let ray = Ray3d(p, sky)
-                    let x = TriangleTree.getNearestIntersection triangleTreeOther ray
+                    let hit = triangleTreeOther.IntersectRay(ray)
+                    let x = if hit.HasIntersection then Some(abs hit.T, hit.T) else None
                     match x with
                     | Some (dist, t) ->
                         //printfn "%A" t
@@ -268,15 +277,7 @@ module DiffCommand =
             }
 
         // Parse background color if provided
-        let backgroundColor = 
-            match config.BackgroundColor with
-            | Some colorStr ->
-                match Utils.parseBackgroundColor colorStr with
-                | Result.Ok color -> color
-                | Result.Error msg ->
-                    printfn "[WARNING] Invalid background color '%s': %s. Using default black." colorStr msg
-                    C4f.Black
-            | None -> C4f.Black
+        let backgroundColor = parseBackgroundColor config.BackgroundColor
 
         // ... and show it using the unified viewer
         let viewerConfig : ViewerConfig = {
@@ -313,5 +314,6 @@ module DiffCommand =
             BaseDir = args.TryGetResult Args.BaseDir
             BackgroundColor = args.TryGetResult Args.BackgroundColor
             Screenshots = globalScreenshots
+            ForceDownload = if args.Contains Args.ForceDownload then Some true else None
         }
         execute config

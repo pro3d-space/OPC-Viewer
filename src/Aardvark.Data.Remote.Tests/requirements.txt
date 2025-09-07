@@ -1,0 +1,2 @@
+# Python dependencies for SFTP testing
+paramiko>=3.0.0
