@@ -19,6 +19,7 @@ module Configuration =
         Screenshots: string option
         ForceDownload: bool option
         Verbose: bool option
+        Version: string  // Application version for display
     }
     
     /// Configuration for the Diff command
@@ -32,6 +33,7 @@ module Configuration =
         BackgroundColor: string option
         Screenshots: string option
         ForceDownload: bool option
+        Version: string  // Application version for display
     }
     
     /// Export format options

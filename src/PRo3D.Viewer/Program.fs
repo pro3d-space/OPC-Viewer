@@ -55,10 +55,10 @@ let main argv =
         
         // Normal command execution
         match arguments.GetAllResults() with
-        | [Diff x]   -> DiffCommand.run x globalScreenshots
+        | [Diff x]   -> DiffCommand.run VERSION x globalScreenshots
         | [Export x] -> ExportCommand.run x
         | [List x]   -> ListCommand.run x
-        | [Project x] -> ProjectCommand.run x globalScreenshots
-        | [View x]   -> ViewCommand.run x globalScreenshots
+        | [Project x] -> ProjectCommand.run VERSION x globalScreenshots
+        | [View x]   -> ViewCommand.run VERSION x globalScreenshots
         | [Version]  -> printfn "%s" VERSION; exit 0
         | _          -> printfn "%s" (parser.PrintUsage()); exit 1

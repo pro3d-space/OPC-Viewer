@@ -7,13 +7,13 @@
 /paket-files
 .vs
 /Aardvark.log
-/data
+/tmp/
 /src/PRo3D.Viewer/*.user
 /screenshots
 ai/datawrangling/candidates/cache/
 
 # Test data and cache files
-test_data/
+/*-cache/
 *.downloading
 *.cache
 *.zip.downloading

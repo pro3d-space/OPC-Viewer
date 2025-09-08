@@ -42,7 +42,7 @@ let tests =
                     Format = ExportFormat.Pts
                     OutFile = Some "remote.pts"
                     Sftp = Some "/path/to/sftp.xml"
-                    BaseDir = Some "./data"
+                    BaseDir = Some "./tmp/data"
                     ForceDownload = None  // Will fail - field doesn't exist
                     Verbose = None        // Will fail - field doesn't exist
                 }

@@ -1,12 +1,12 @@
 {
   "command": "diff",
   "data": [
-    "../data/before-event",
-    "../data/after-event"
+    "../tmp/data/before-event",
+    "../tmp/data/after-event"
   ],
   "noValue": "NaN",
   "speed": 2.0,
   "verbose": true,
   "sftp": "../config/sftp.xml",
-  "baseDir": "../datasets"
+  "baseDir": "../tmp/datasets"
 }

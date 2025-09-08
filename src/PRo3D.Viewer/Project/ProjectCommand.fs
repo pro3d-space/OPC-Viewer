@@ -24,7 +24,7 @@ module ProjectCommand =
 
     // These conversion functions have been removed - use ConfigurationBuilder instead
 
-    let run (args : ParseResults<Args>) (globalScreenshots: string option) : int =
+    let run (version: string) (args : ParseResults<Args>) (globalScreenshots: string option) : int =
         
         let projectFilePath = args.GetResult(Args.ProjectFile)
         
@@ -39,7 +39,7 @@ module ProjectCommand =
             
         | ProjectConfig.ViewConfig viewProject ->
             // Build ViewConfig directly from the parsed project
-            let baseConfig = ConfigurationBuilder.fromViewProject projectFileDir viewProject
+            let baseConfig = ConfigurationBuilder.fromViewProject version projectFileDir viewProject
             
             // Override background color, screenshots, and force download if provided via CLI arguments
             let forceDownloadOverride = if args.Contains Args.ForceDownload then Some true else None
@@ -62,7 +62,7 @@ module ProjectCommand =
         
         | ProjectConfig.DiffConfig diffProject ->
             // Build DiffConfig directly from the parsed project
-            let baseConfig = ConfigurationBuilder.fromDiffProject projectFileDir diffProject
+            let baseConfig = ConfigurationBuilder.fromDiffProject version projectFileDir diffProject
             
             // Override background color, screenshots, and force download if provided via CLI arguments
             let forceDownloadOverride = if args.Contains Args.ForceDownload then Some true else None
