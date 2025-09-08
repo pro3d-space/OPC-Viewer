@@ -15,11 +15,24 @@ jobs:
   release:
     runs-on: ubuntu-latest
     if: github.repository == 'pro3d-space/OPC-Viewer'
+    outputs:
+      version: ${{ steps.check_version.outputs.version }}
+      should_release: ${{ steps.check_version.outputs.version != '0.0.0.0' && steps.check_version.outputs.version != '' }}
     
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nuget/packages
+            packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('paket.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -70,6 +83,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nuget/packages
+            packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('paket.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -107,3 +130,24 @@ jobs:
         with:
           name: ${{ matrix.runtime }}-executable
           path: pro3dviewer-v${{ steps.get_version.outputs.version }}-${{ matrix.runtime }}*
+
+  upload-release-assets:
+    needs: [release, build-executables]
+    runs-on: ubuntu-latest
+    if: needs.build-executables.result == 'success'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Upload to Release
+        run: |
+          # Find all executables and upload them to the release
+          for file in artifacts/*/*; do
+            echo "Uploading $file"
+            gh release upload ${{ needs.release.outputs.version }} "$file" \
+              --repo pro3d-space/OPC-Viewer \
+              --clobber
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
