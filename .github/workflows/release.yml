@@ -8,6 +8,7 @@ on:
       - '**.fs'
       - '**.fsproj'
       - 'paket.dependencies'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 jobs:
