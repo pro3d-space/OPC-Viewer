@@ -8,6 +8,7 @@
 - Added aardpack tool for automated GitHub releases with cross-platform binaries
 - Added GitHub Actions workflow for automated releases on RELEASE_NOTES.md changes
 - Updated build scripts with publish commands for standalone executables (Windows/Linux/macOS)
+- Repository cleanup: moved tests to /src/, scripts to /ai/, runtime directories to /tmp/ (35% reduction in root items)
 
 ## 1.1.4
 - Code polish: Improved naming conventions (FetchConfig.defaultConfig → Fetch.defaultConfig)

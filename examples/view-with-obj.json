@@ -1,7 +1,7 @@
 {
   "command": "view",
   "data": [
-    { "path": "../data/mars-rover-site" },
+    { "path": "../tmp/data/mars-rover-site" },
     { "path": "../models/rover.obj" },
     { "path": "../models/terrain.obj" }
   ],

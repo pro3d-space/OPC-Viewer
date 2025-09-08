@@ -1,9 +1,9 @@
 {
   "command": "list",
   "data": [
-    "./data/region1",
-    "./data/region2",
-    "./data/region3"
+    "./tmp/data/region1",
+    "./tmp/data/region2",
+    "./tmp/data/region3"
   ],
   "stats": true
 }

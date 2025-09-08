@@ -16,5 +16,5 @@
   ],
   "speed": 10.0,
   "sftp": "./config/sftp-config.xml",
-  "baseDir": "./data"
+  "baseDir": "./tmp/data"
 }

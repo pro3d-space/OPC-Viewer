@@ -1,7 +1,7 @@
 {
   "command": "view",
   "data": [
-    { "path": "../data/local-dataset" },
+    { "path": "../tmp/data/local-dataset" },
     { "path": "C:\\Data\\Datasets\\mars-rover" },
     { "path": "/home/user/opc-data" },
     { "path": "W:\\NetworkShare\\datasets\\terrain" },
