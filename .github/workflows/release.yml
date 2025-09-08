@@ -145,7 +145,7 @@ jobs:
           # Find all executables and upload them to the release
           for file in artifacts/*/*; do
             echo "Uploading $file"
-            gh release upload v${{ needs.release.outputs.version }} "$file" \
+            gh release upload ${{ needs.release.outputs.version }} "$file" \
               --repo pro3d-space/OPC-Viewer \
               --clobber
           done
