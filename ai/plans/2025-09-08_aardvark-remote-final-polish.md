@@ -1,5 +1,7 @@
 # Aardvark.Data.Remote Final Polish Pass
 
+> **MIGRATION NOTE**: This library has been moved to its own repository and is now available as NuGet package `Aardvark.Data.Remote` v1.0.0. Local implementation was removed in v1.1.5. See [migration plan](2025-09-08_aardvark-remote-nuget-migration.md).
+
 **Date**: 2025-09-08  
 **Feature**: Final polish pass to improve code quality, naming conventions, and API consistency  
 **Status**: COMPLETED ✅

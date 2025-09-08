@@ -1,8 +1,10 @@
 # Aardvark.Data.Remote Config-Based API Refactor
 
+> **MIGRATION NOTE**: This library has been moved to its own repository and is now available as NuGet package `Aardvark.Data.Remote` v1.0.0. Local implementation was removed in v1.1.5. See [migration plan](2025-09-08_aardvark-remote-nuget-migration.md).
+
 **Date**: 2025-09-08  
 **Feature**: Refactor Aardvark.Data.Remote library to use idiomatic F# and aligned C# config-based APIs  
-**Status**: IN PROGRESS
+**Status**: COMPLETED
 
 ## Overview
 

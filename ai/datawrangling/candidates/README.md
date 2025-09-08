@@ -13,7 +13,7 @@ This directory contains tools and data for processing Mars OPC datasets comparin
 
 ### Download Script
 
-The `download.fsx` script uses Aardvark.Data.Remote to efficiently cache all SFTP files:
+The `download.fsx` script uses the Aardvark.Data.Remote NuGet package to efficiently cache all SFTP files:
 
 ```bash
 # Run from ai/datawrangling/candidates/ directory
@@ -21,7 +21,7 @@ dotnet fsi download.fsx
 ```
 
 **Features:**
-- Uses Aardvark.Data.Remote's Fetch API exclusively
+- Uses Aardvark.Data.Remote NuGet package's Fetch API exclusively
 - Built-in caching - files downloaded once and reused automatically
 - Natural SFTP path structure preservation  
 - Console progress reporting via Fetch API
@@ -44,7 +44,7 @@ cache/sftp/dig-sftp.joanneum.at/Mission/0300/0320/
 This structure:
 - Preserves the source organization
 - Allows safe cache sharing between scripts
-- Uses Aardvark.Data.Remote's built-in caching logic
+- Uses Aardvark.Data.Remote NuGet package's built-in caching logic
 
 The cache directory is excluded from git to avoid storing large binary files in the repository.
 

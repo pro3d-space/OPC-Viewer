@@ -1,20 +1,8 @@
 #!/usr/bin/env dotnet fsi
 
+#r "nuget: Aardvark.Data.Remote"
 #r "nuget: System.Text.Json"
 #r "nuget: SSH.NET"
-#load "../../../src/Aardvark.Data.Remote/src/Aardvark.Data.Remote/Types.fs"
-#load "../../../src/Aardvark.Data.Remote/src/Aardvark.Data.Remote/Parser.fs"
-#load "../../../src/Aardvark.Data.Remote/src/Aardvark.Data.Remote/Provider.fs"
-#load "../../../src/Aardvark.Data.Remote/src/Aardvark.Data.Remote/Common.fs"
-#load "../../../src/Aardvark.Data.Remote/src/Aardvark.Data.Remote/Cache.fs"
-#load "../../../src/Aardvark.Data.Remote/src/Aardvark.Data.Remote/Zip.fs"
-#load "../../../src/Aardvark.Data.Remote/src/Aardvark.Data.Remote/FileZillaConfig.fs"
-#load "../../../src/Aardvark.Data.Remote/src/Aardvark.Data.Remote/Progress.fs"
-#load "../../../src/Aardvark.Data.Remote/src/Aardvark.Data.Remote/Providers/LocalProvider.fs"
-#load "../../../src/Aardvark.Data.Remote/src/Aardvark.Data.Remote/Providers/HttpProvider.fs"
-#load "../../../src/Aardvark.Data.Remote/src/Aardvark.Data.Remote/Providers/SftpProvider.fs"
-#load "../../../src/Aardvark.Data.Remote/src/Aardvark.Data.Remote/Resolver.fs"
-#load "../../../src/Aardvark.Data.Remote/src/Aardvark.Data.Remote/Fetch.fs"
 
 open System
 open System.IO
