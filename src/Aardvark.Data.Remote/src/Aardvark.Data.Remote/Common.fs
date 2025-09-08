@@ -8,11 +8,11 @@ open System.Threading.Tasks
 module Common =
     
     /// Report progress if callback is configured
-    let reportProgress (config: ResolverConfig) (percent: float) =
-        config.ProgressCallback |> Option.iter (fun cb -> cb percent)
+    let reportProgress (config: FetchConfig) (percent: float) =
+        config.progress |> Option.iter (fun cb -> cb percent)
     
     /// Create a rate-limited progress reporter that limits updates to specified interval
-    let createRateLimitedReporter (config: ResolverConfig) (intervalMs: int) =
+    let createRateLimitedReporter (config: FetchConfig) (intervalMs: int) =
         let mutable lastReportTime = DateTime.MinValue
         fun (percent: float) ->
             let now = DateTime.UtcNow
@@ -23,13 +23,13 @@ module Common =
                 reportProgress config percent
     
     /// Execute an async operation with retry logic and exponential backoff
-    let retryAsync (config: ResolverConfig) (operation: int -> Task<'T>) : Task<Result<'T, exn>> =
+    let retryAsync (config: FetchConfig) (operation: int -> Task<'T>) : Task<Result<'T, exn>> =
         task {
             let mutable lastException = None
             let mutable success = false
             let mutable result = Unchecked.defaultof<'T>
             
-            for attempt = 1 to config.MaxRetries do
+            for attempt = 1 to config.maxRetries do
                 if not success then
                     try
                         let! opResult = operation attempt
@@ -37,7 +37,7 @@ module Common =
                         success <- true
                     with ex ->
                         lastException <- Some ex
-                        if attempt < config.MaxRetries then
+                        if attempt < config.maxRetries then
                             // Exponential backoff: 2^(attempt-1) seconds
                             let delay = TimeSpan.FromSeconds(float (2.0 ** float (attempt - 1)))
                             do! Task.Delay(delay)
@@ -123,10 +123,10 @@ module Common =
                 Directory.CreateDirectory(targetDir) |> ignore
         
         /// Standard download workflow with cache validation, lock file management, and retry logic
-        let executeWithRetry (config: ResolverConfig) (targetPath: string) (downloadOperation: int -> Task<string>) : Task<Result<string, exn>> =
+        let executeWithRetry (config: FetchConfig) (targetPath: string) (downloadOperation: int -> Task<string>) : Task<Result<string, exn>> =
             task {
                 // Check if we should download (not cached, force download, or cache invalid)
-                if config.ForceDownload || not (LockFile.isValidCache targetPath) then
+                if config.forceDownload || not (LockFile.isValidCache targetPath) then
                     // Ensure target directory exists
                     ensureDirectoryExists targetPath
                     
@@ -139,18 +139,3 @@ module Common =
                     return Ok targetPath
             }
 
-    /// Create a singleton provider with standard registration functions
-    module Provider =
-        
-        /// Create singleton instance functions for a provider
-        let createSingleton<'T when 'T :> IDataProvider> (provider: unit -> 'T) =
-            let instance = lazy (provider() :> IDataProvider)
-            
-            let create() = instance.Value
-            
-            let register() =
-                let p = create()
-                ProviderRegistry.register p
-                p
-            
-            (create, register)

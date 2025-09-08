@@ -6,6 +6,8 @@ This document describes the standard workflow for implementing new features in t
 
 **CRITICAL**: For every feature implementation, you MUST follow this exact workflow:
 
+0. **Always follow the PRIME DIRECTIVES from CLAUDE.md**
+
 1. **Create a Detailed Plan Document FIRST**:
    - Create a markdown file in `ai/plans/` with date prefix: `YYYY-MM-DD_feature-name.md`
    - Example: `2024-12-18-csv-export.md`, `2024-12-18-verbose-logging.md`

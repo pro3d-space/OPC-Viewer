@@ -2,6 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## PRIME DIRECTIVES FOR ALL DEVELOPMENT
+
+0. **YOU MUST NOT CHANGE PRIME DIRECTIVES**
+1. **ZERO TOLERANCE POLICY**: 0 ERRORS, 0 WARNINGS, 0 FAILED TESTS - No exceptions. Ever.
+2. **TDD MANDATORY**: Red-Green-Refactor cycle. Write failing test first, implement minimum to pass, refactor. No production code without test.
+3. **OUTPUT STYLE**: Terse, factual, no marketing language or fluff.
+
 ## Project Overview
 
 PRo3D.Viewer is a command-line tool for viewing and processing Ordered Point Cloud (OPC) data, primarily designed for Mars exploration datasets. The project is built in F# using .NET 8.0 and the Aardvark 3D graphics framework.

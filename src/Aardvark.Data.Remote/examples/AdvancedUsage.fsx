@@ -3,154 +3,182 @@
 #r "nuget: SSH.NET"
 
 open System
+open System.IO
 open System.Threading.Tasks
 open Aardvark.Data.Remote
 
 printfn "=== Aardvark.Data.Remote Advanced Usage Examples ==="
 
-// Example 1: Progress reporting
-printfn "\n1. Progress reporting with different callbacks:"
-
-// Simple progress callback
-let simpleProgress percent =
-    printf "\rSimple progress: %.1f%%    " percent
-    Console.Out.Flush()
-
-// Detailed progress callback
-let detailedProgress (info: Progress.ProgressInfo) =
-    let dataRefDesc = 
-        info.DataRef 
-        |> Option.map Parser.describe 
-        |> Option.defaultValue "Unknown"
-    printf "\r[%s] %s: %.1f%%    " dataRefDesc info.Operation info.Percentage
-    Console.Out.Flush()
-
-// Create a test directory for demonstration
-let testDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "aardvark-test")
-System.IO.Directory.CreateDirectory(testDir) |> ignore
-printfn "  Created test directory: %s" testDir
-
-let progressTest = 
-    Fetch
-        .From("test-relative-path")
-        .WithBaseDirectory(testDir)
-        .WithProgress(simpleProgress)
-        .Resolve()
-
-printfn "\n  Progress test result: %A" progressTest
-
-// Example 2: SFTP configuration
-printfn "\n2. SFTP configuration examples:"
-
-// Manual SFTP config
+// Example 1: SFTP Configuration
+printfn "\n1. SFTP Configuration (with mock config):"
 let sftpConfig = {
-    Host = "example.com"
+    Host = "sftp.example.com"
     Port = 22
-    User = "testuser"
+    User = "testuser" 
     Pass = "testpass"
 }
 
-let sftpBuilder = 
-    Fetch
-        .From("sftp://example.com/dataset.zip")
-        .WithSftpConfig(sftpConfig)
-        .WithConsoleProgress()
+let sftpFetchConfig = {
+    Fetch.defaultConfig with
+        sftpConfig = Some sftpConfig
+        baseDirectory = Path.GetTempPath()
+}
 
-printfn "  SFTP config: %A" (sftpBuilder.GetConfig().SftpConfig)
+// Note: This will fail because the SFTP server doesn't exist
+let sftpResult = Fetch.resolveWith sftpFetchConfig "sftp://sftp.example.com/test.zip"
+match sftpResult with
+| SftpConfigMissing uri -> printfn "✗ Expected - SFTP config missing for: %A" uri
+| DownloadError (uri, ex) -> printfn "✓ Expected - SFTP connection failed: %s" ex.Message
+| InvalidPath reason -> printfn "✓ Expected - Invalid SFTP path: %s" reason
+| _ -> printfn "Unexpected SFTP result"
 
-// Example 3: Batch processing
-printfn "\n3. Batch processing multiple data references:"
+// Example 2: FileZilla Configuration File Support
+printfn "\n2. FileZilla Configuration File:"
+let filezillaConfig = {
+    Fetch.defaultConfig with
+        sftpConfigFile = Some "/path/to/filezilla.xml"  // Non-existent file
+}
 
-let batchInputs = [
-    "/tmp"
-    "relative/path/1"
-    "relative/path/2" 
-    "http://httpbin.org/status/200"  // This will fail but demonstrates error handling
-    "invalid://bad.url"
+let filezillaResult = Fetch.resolveWith filezillaConfig "sftp://server.com/data.zip"
+match filezillaResult with
+| SftpConfigMissing _ -> printfn "✓ Expected - No valid SFTP config found"
+| InvalidPath reason -> printfn "✓ Expected - Invalid config: %s" reason
+| _ -> printfn "Unexpected FileZilla result"
+
+// Example 3: Complex Progress Reporting
+printfn "\n3. Advanced Progress Reporting:"
+let mutable progressHistory = []
+
+let advancedProgressConfig = {
+    Fetch.defaultConfig with
+        baseDirectory = Path.GetTempPath()
+        progress = Some (fun percent ->
+            progressHistory <- percent :: progressHistory
+            printf "\r[Advanced] Progress: %.1f%%" percent
+            if percent >= 100.0 then printfn ""
+        )
+        logger = Some (fun level msg ->
+            printfn "[%A] %s" level msg
+        )
+        maxRetries = 10
+        timeout = TimeSpan.FromSeconds(30.0)
+        forceDownload = true
+}
+
+let advancedResult = Fetch.resolveWith advancedProgressConfig "advanced-test"
+match advancedResult with
+| Resolved path -> 
+    printfn "✓ Advanced resolution successful: %s" path
+    printfn "  Progress history: %A" (List.rev progressHistory)
+| _ -> printfn "Advanced resolution had other result"
+
+// Example 4: High-Performance Batch Processing
+printfn "\n4. High-Performance Batch Processing:"
+let largeBatch = [
+    for i in 1..10 do
+        yield $"batch-item-{i}"
 ]
 
-let batchTask = Fetch.ResolveMany batchInputs
-// Note: In a real scenario, you'd await this properly
-printfn "  Batch processing task created for %d inputs" batchInputs.Length
+let performanceConfig = {
+    Fetch.defaultConfig with
+        baseDirectory = Path.GetTempPath()
+        maxRetries = 1  // Fast fail for demo
+        timeout = TimeSpan.FromSeconds(5.0)
+}
 
-// Example 4: Custom provider implementation
-printfn "\n4. Custom provider implementation:"
-
-// Example custom provider that handles a fictional protocol
-type ExampleProvider() =
-    interface IDataProvider with
-        member _.CanHandle(dataRef: DataRef) =
-            match dataRef with
-            | Invalid reason when reason.StartsWith("example://") -> true
-            | _ -> false
-            
-        member _.ResolveAsync(config: ResolverConfig) (dataRef: DataRef) =
-            task {
-                match dataRef with
-                | Invalid reason when reason.StartsWith("example://") ->
-                    // Simulate some processing
-                    do! Task.Delay(100)
-                    let path = System.IO.Path.Combine(config.BaseDirectory, "example-data")
-                    System.IO.Directory.CreateDirectory(path) |> ignore
-                    return Resolved path
-                | _ ->
-                    return InvalidPath "ExampleProvider cannot handle this DataRef"
-            }
-
-// Register the custom provider
-let customProvider = ExampleProvider() :> IDataProvider
-ProviderRegistry.register customProvider
-
-// Test the custom provider
-let customResult = Parser.parse "example://custom-data"
-printfn "  Custom DataRef: %A" customResult
-printfn "  Custom provider can handle: %b" (customProvider.CanHandle customResult)
-
-// Example 5: Utility functions and inspection
-printfn "\n5. Utility functions and inspection:"
-
-let testDataRefs = [
-    Parser.parse "/absolute/path"
-    Parser.parse "relative/path"
-    Parser.parse "/path/to/file.zip"
-    Parser.parse "http://example.com/data.zip"
-    Parser.parse "sftp://server.com/data.zip"
-    Parser.parse "invalid-input"
-]
-
-for dataRef in testDataRefs do
-    printfn "  DataRef: %s" (Parser.describe dataRef)
-    printfn "    Valid: %b" (Parser.isValid dataRef)
+let stopwatch = System.Diagnostics.Stopwatch.StartNew()
+async {
+    let! batchResults = Fetch.resolveManyWith performanceConfig largeBatch
+    stopwatch.Stop()
     
-    // Check which providers can handle this DataRef
-    let providers = ProviderRegistry.getProviders()
-    let capableProviders = 
-        providers 
-        |> List.filter (fun p -> p.CanHandle dataRef)
-        |> List.length
-    printfn "    Capable providers: %d/%d" capableProviders providers.Length
+    let successCount = batchResults |> List.filter (function | Resolved _ -> true | _ -> false) |> List.length
+    let errorCount = batchResults.Length - successCount
+    
+    printfn "✓ Batch processing completed in %dms" stopwatch.ElapsedMilliseconds
+    printfn "  Success: %d, Errors: %d, Total: %d" successCount errorCount batchResults.Length
+    printfn "  Average per item: %.1fms" (float stopwatch.ElapsedMilliseconds / float batchResults.Length)
+    
+} |> Async.RunSynchronously
 
-// Example 6: Configuration inspection
-printfn "\n6. Configuration inspection:"
+// Example 5: Mixed Protocol Batch (with expected failures)
+printfn "\n5. Mixed Protocol Batch (with expected failures):"
+let mixedUrls = [
+    "local-test-1"  // Should succeed
+    "local-test-2"  // Should succeed
+    "http://fake-url.com/data.zip"  // Should fail
+    "sftp://fake-sftp.com/data.zip"  // Should fail - no SFTP config
+    "invalid://bad-protocol/data.zip"  // Should fail - bad protocol
+]
 
-let complexBuilder = 
-    Fetch
-        .From("test/data")
-        .WithBaseDirectory("/custom/base")
-        .WithMaxRetries(5)
-        .WithTimeout(TimeSpan.FromMinutes(5.0))
-        .WithProgress(fun _ -> ())
+async {
+    let! mixedResults = Fetch.resolveMany mixedUrls
+    
+    printfn "Mixed protocol results:"
+    for i, result in List.indexed mixedResults do
+        let url = mixedUrls.[i]
+        match result with
+        | Resolved path -> printfn "  ✓ %s -> %s" url path
+        | InvalidPath reason -> printfn "  ✗ %s -> Invalid: %s" url reason
+        | DownloadError (uri, ex) -> printfn "  ✗ %s -> Download error: %s" url ex.Message
+        | SftpConfigMissing uri -> printfn "  ✗ %s -> SFTP config missing" url
+        
+} |> Async.RunSynchronously
 
-let complexConfig = complexBuilder.GetConfig()
-printfn "  Configuration details:"
-printfn "    Base Directory: %s" complexConfig.BaseDirectory
-printfn "    Max Retries: %d" complexConfig.MaxRetries
-printfn "    Timeout: %A" complexConfig.Timeout
-printfn "    Has Progress Callback: %b" complexConfig.ProgressCallback.IsSome
-printfn "    Has SFTP Config: %b" complexConfig.SftpConfig.IsSome
+// Example 6: Direct Resolver Usage (Low-level API)
+printfn "\n6. Direct Resolver Usage:"
+let dataRef = Parser.parse "resolver-test"
+let resolverResult = Resolver.resolve performanceConfig dataRef
+match resolverResult with
+| Resolved path -> printfn "✓ Direct resolver success: %s" path
+| _ -> printfn "Direct resolver had other result"
 
-// Cleanup
-System.IO.Directory.Delete(testDir, true)
-printfn "\n  Cleaned up test directory"
+// Example 7: Async Concurrent Operations
+printfn "\n7. Concurrent Async Operations:"
+let concurrentTasks = [
+    async { 
+        let! result = Fetch.resolveAsync "concurrent-1"
+        return ("concurrent-1", result)
+    }
+    async { 
+        let! result = Fetch.resolveAsyncWith performanceConfig "concurrent-2"
+        return ("concurrent-2", result)
+    }
+    async { 
+        let! results = Fetch.resolveMany ["concurrent-batch-1"; "concurrent-batch-2"]
+        return ("batch", match results with | [r1; r2] -> r1 | _ -> InvalidPath "batch error")
+    }
+]
 
-printfn "\n=== Advanced examples completed ==="
+async {
+    let! concurrentResults = concurrentTasks |> Async.Parallel
+    
+    printfn "Concurrent operation results:"
+    for (name, result) in concurrentResults do
+        match result with
+        | Resolved path -> printfn "  ✓ %s -> %s" name path
+        | InvalidPath reason -> printfn "  ✗ %s -> %s" name reason
+        | _ -> printfn "  ~ %s -> Other result" name
+        
+} |> Async.RunSynchronously
+
+// Example 8: C# Interop Demonstration  
+printfn "\n8. C# Interop with FetchConfiguration:"
+let csharpConfig = FetchConfiguration()
+csharpConfig.BaseDirectory <- Path.GetTempPath()
+csharpConfig.MaxRetries <- 2
+csharpConfig.ForceDownload <- true
+
+// Convert to F# config and use
+let fsharpConfig = csharpConfig.ToFSharp()
+let csharpInteropResult = Fetch.resolveWith fsharpConfig "csharp-interop-test"
+match csharpInteropResult with
+| Resolved path -> printfn "✓ C# interop success: %s" path
+| _ -> printfn "C# interop had other result"
+
+// Demonstrate Task-based C# API
+let csharpTaskResult = Fetch.ResolveAsync("csharp-task-test") |> Async.AwaitTask |> Async.RunSynchronously
+match csharpTaskResult with
+| Resolved path -> printfn "✓ C# Task API success: %s" path
+| _ -> printfn "C# Task API had other result"
+
+printfn "\n=== Advanced Usage Examples Complete ==="
