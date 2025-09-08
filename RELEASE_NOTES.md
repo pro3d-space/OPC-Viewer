@@ -1,3 +1,10 @@
+## 1.1.5
+- MAJOR: Migrated from local Aardvark.Data.Remote project to official NuGet package v1.0.0
+- Removed ~200 local files (source code, tests, examples, build artifacts)
+- Updated project references and build system to use NuGet package
+- Simplified test suite - no longer includes Aardvark.Data.Remote tests (handled by package)
+- All PRo3D.Viewer functionality unchanged - seamless migration
+
 ## 1.1.4
 - Code polish: Improved naming conventions (FetchConfig.defaultConfig → Fetch.defaultConfig)
 - Code polish: Complete migration from ResolverConfig to FetchConfig (eliminated legacy type)

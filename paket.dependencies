@@ -43,5 +43,7 @@ nuget Argu                              ~> 6.2.5
 nuget SSH.NET                           ~> 2025.0.0
 
 // Testing dependencies
+nuget Aardvark.Data.Remote              ~> 1.0.0
+
 nuget Expecto                           ~> 10.2.1
 nuget Expecto.FsCheck                   ~> 10.2.1
