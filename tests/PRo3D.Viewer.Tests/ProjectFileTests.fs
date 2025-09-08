@@ -118,7 +118,7 @@ let tests =
                         ForceDownload = Some true
                     }
                     
-                    let config = PRo3D.Viewer.ConfigurationBuilder.fromDiffProject projectDir project
+                    let config = PRo3D.Viewer.ConfigurationBuilder.fromDiffProject "1.0.0-test" projectDir project
                     
                     // Check that relative paths are resolved
                     Expect.stringContains config.Data[0] projectDir "First path should be resolved relative to project dir"

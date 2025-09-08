@@ -19,6 +19,7 @@ let tests =
                     BackgroundColor = None
                     Screenshots = None
                     ForceDownload = None
+                    Version = "1.0.0-test"
                 }
                 Expect.equal config.Verbose (Some true) "Verbose should be set to true"
             }
@@ -34,6 +35,7 @@ let tests =
                     BackgroundColor = None
                     Screenshots = None
                     ForceDownload = None
+                    Version = "1.0.0-test"
                 }
                 Expect.equal config.Verbose None "Verbose should be None"
             }
@@ -49,6 +51,7 @@ let tests =
                     BackgroundColor = None
                     Screenshots = None
                     ForceDownload = None
+                    Version = "1.0.0-test"
                 }
                 Expect.isTrue (config.NoValue.IsNone) "NoValue should be None"
                 Expect.isTrue (config.Speed.IsNone) "Speed should be None"
@@ -71,6 +74,7 @@ let tests =
                     BackgroundColor = None
                     Screenshots = None
                     ForceDownload = None
+                    Version = "1.0.0-test"
                 }
                 Expect.equal config.Data testData "Data array should match input"
                 Expect.equal config.Data.Length 2 "Data array should have 2 elements"
@@ -88,6 +92,7 @@ let tests =
                     Screenshots = None
                     ForceDownload = None
                     Verbose = None
+                    Version = "1.0.0-test"
                 }
                 Expect.equal config.Data.Length 0 "Empty data array should have length 0"
             }
@@ -103,6 +108,7 @@ let tests =
                     Screenshots = screenshotPath
                     ForceDownload = None
                     Verbose = None
+                    Version = "1.0.0-test"
                 }
                 Expect.equal config.Screenshots screenshotPath "Screenshots path should match"
             }

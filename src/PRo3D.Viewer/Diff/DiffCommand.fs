@@ -293,12 +293,13 @@ module DiffCommand =
             textOverlayFunc = None
             backgroundColor = backgroundColor
             screenshotDirectory = config.Screenshots
+            version = config.Version
         }
         
         UnifiedViewer.run viewerConfig |> ignore
         0
 
-    let run (args : ParseResults<Args>) (globalScreenshots: string option) : int =
+    let run (version: string) (args : ParseResults<Args>) (globalScreenshots: string option) : int =
         // Build DiffConfig from command-line arguments
         let config : DiffConfig = {
             Data = 
@@ -315,5 +316,6 @@ module DiffCommand =
             BackgroundColor = args.TryGetResult Args.BackgroundColor
             Screenshots = globalScreenshots
             ForceDownload = if args.Contains Args.ForceDownload then Some true else None
+            Version = version
         }
         execute config
