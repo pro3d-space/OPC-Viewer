@@ -3,44 +3,44 @@ namespace Aardvark.Data.Remote.Providers
 open System
 open System.IO
 open System.Net.Http
-open System.Threading.Tasks
 open Aardvark.Data.Remote
 open Aardvark.Data.Remote.Common
 
-/// Provider for HTTP/HTTPS downloads
-type HttpProvider() =
+/// Functional HTTP provider module
+module HttpProvider =
     
-    interface IDataProvider with
-        
-        member _.CanHandle(dataRef: DataRef) =
-            match dataRef with
-            | HttpZip _ -> true
-            | _ -> false
-        
-        member _.ResolveAsync config dataRef =
-            task {
+    /// Check if this provider can handle the given DataRef
+    let canHandle dataRef =
+        match dataRef with
+        | HttpZip _ -> true
+        | _ -> false
+    
+    /// Resolve a DataRef using the HTTP provider
+    let resolve (config: FetchConfig) dataRef =
+        async {
                 match dataRef with
                 | HttpZip uri ->
                     try
                         // Validate path to prevent directory traversal
                         let relPath = uri.AbsolutePath.Substring(1).Replace("..", "").Replace("~", "")
-                        let targetPath = Path.GetFullPath(Path.Combine(config.BaseDirectory, relPath))
+                        let targetPath = Path.GetFullPath(Path.Combine(config.baseDirectory, relPath))
                         
                         // Ensure target path is within base directory
-                        if not (targetPath.StartsWith(Path.GetFullPath(config.BaseDirectory))) then
+                        if not (targetPath.StartsWith(Path.GetFullPath(config.baseDirectory))) then
                             return InvalidPath $"Path traversal detected: {targetPath}"
                         else
                             // Use standard download workflow
                             let downloadOperation attempt =
-                                task {
-                                    use httpClient = new HttpClient(Timeout = config.Timeout)
-                                    Logger.log config.Logger Logger.Info $"[HTTP] Downloading {uri} to {targetPath}"
+                                async {
+                                    use httpClient = new HttpClient(Timeout = config.timeout)
+                                    Logger.log config.logger Logger.Info $"[HTTP] Downloading {uri} to {targetPath}"
                                     
                                     let progressReporter = Common.createRateLimitedReporter config 1000
                                     progressReporter 0.0
                                     
                                     // Use ResponseHeadersRead to start streaming immediately
-                                    use! response = httpClient.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead)
+                                    let! response = httpClient.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead) |> Async.AwaitTask
+                                    use response = response
                                     response.EnsureSuccessStatusCode() |> ignore
                                     
                                     // Get total size if available
@@ -51,7 +51,8 @@ type HttpProvider() =
                                             None
                                     
                                     // Stream to file with progress
-                                    use! stream = response.Content.ReadAsStreamAsync()
+                                    let! stream = response.Content.ReadAsStreamAsync() |> Async.AwaitTask
+                                    use stream = stream
                                     use fileStream = new FileStream(targetPath, FileMode.Create)
                                     
                                     let buffer = Array.zeroCreate<byte> 8192
@@ -76,13 +77,14 @@ type HttpProvider() =
                                     fileStream.Flush()
                                     
                                     let fileInfo = FileInfo(targetPath)
-                                    Logger.log config.Logger Logger.Info $"[HTTP] Downloaded {fileInfo.Length} bytes to {targetPath}"
+                                    Logger.log config.logger Logger.Info $"[HTTP] Downloaded {fileInfo.Length} bytes to {targetPath}"
                                     progressReporter 100.0
                                     
                                     return targetPath
                                 }
                             
-                            let! result = Common.Download.executeWithRetry config targetPath downloadOperation
+                            let downloadTask attempt = downloadOperation attempt |> Async.StartAsTask
+                            let! result = Common.Download.executeWithRetry config targetPath downloadTask |> Async.AwaitTask
                             
                             match result with
                             | Ok path -> return Resolved path
@@ -92,8 +94,10 @@ type HttpProvider() =
                         
                 | _ ->
                     return InvalidPath "HttpProvider cannot handle this DataRef type"
-            }
-
-/// Module functions for the HttpProvider
-module HttpProvider =
-    let create, register = Common.Provider.createSingleton HttpProvider
+        }
+    
+    /// Provider record instance
+    let provider : Provider = {
+        canHandle = canHandle
+        resolve = resolve
+    }

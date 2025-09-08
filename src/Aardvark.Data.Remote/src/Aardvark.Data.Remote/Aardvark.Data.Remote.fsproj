@@ -15,7 +15,6 @@
     <Compile Include="Logger.fs" />
     <Compile Include="Types.fs" />
     <Compile Include="Parser.fs" />
-    <Compile Include="Provider.fs" />
     <Compile Include="Common.fs" />
     <Compile Include="Cache.fs" />
     <Compile Include="Zip.fs" />
@@ -24,6 +23,7 @@
     <Compile Include="Providers\LocalProvider.fs" />
     <Compile Include="Providers\HttpProvider.fs" />
     <Compile Include="Providers\SftpProvider.fs" />
+    <Compile Include="Providers.fs" />
     <Compile Include="Resolver.fs" />
     <Compile Include="Fetch.fs" />
   </ItemGroup>
