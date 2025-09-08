@@ -8,6 +8,7 @@ on:
       - '**.fs'
       - '**.fsproj'
       - 'paket.dependencies'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 jobs:
@@ -27,6 +28,9 @@ jobs:
 
       - name: Restore tools
         run: dotnet tool restore
+
+      - name: Restore packages
+        run: dotnet paket restore
 
       - name: Check version
         id: check_version
