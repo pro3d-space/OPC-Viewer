@@ -32,11 +32,11 @@ Located at: `W:\Datasets\Pro3D\AI-Comparison\`
 ## Implementation Details
 
 ### F# Scripts Created
-1. **`scripts/AnalyzeAICandidates.fsx`**: Main script generating all project files and commands
-2. **`scripts/VerifyPaths.fsx`**: SFTP server structure validation using psftp
-3. **`scripts/CheckJobFolders.fsx`**: Detailed folder content analysis
-4. **`scripts/CheckZipFile.fsx`**: Zip file integrity verification
-5. **`scripts/TestSingleComparison.fsx`**: Single comparison test with timeout
+1. **`ai/scripts/AnalyzeAICandidates.fsx`**: Main script generating all project files and commands
+2. **`ai/scripts/VerifyPaths.fsx`**: SFTP server structure validation using psftp
+3. **`ai/scripts/CheckJobFolders.fsx`**: Detailed folder content analysis
+4. **`ai/scripts/CheckZipFile.fsx`**: Zip file integrity verification
+5. **`ai/scripts/TestSingleComparison.fsx`**: Single comparison test with timeout
 
 ### Authentication Setup
 - **Config File**: `W:\Datasets\Pro3D\confidential\2025-02-24_AI-Mars-3D\Mastcam-Z.xml`
@@ -135,7 +135,7 @@ PowerShell -ExecutionPolicy Bypass -File W:\Datasets\Pro3D\AI-Comparison\Command
 ### Generated Assets
 - `W:\Datasets\Pro3D\AI-Comparison\README.md`: Complete usage guide
 - `W:\Datasets\Pro3D\AI-Comparison\Projects\*.json`: Individual comparison projects
-- `scripts/AnalyzeAICandidates.fsx`: Complete path generation and validation logic
+- `ai/scripts/AnalyzeAICandidates.fsx`: Complete path generation and validation logic
 
 ### Source Modifications
 - `src/PRo3D.Viewer/Diff/DiffCommand.fs`: Multi-layer handling fix (lines 89-120)

@@ -22,7 +22,7 @@ let tests =
                     Format = ExportFormat.Pts
                     OutFile = Some "test_sftp_export.pts"
                     Sftp = Some "W:\\Datasets\\Pro3D\\confidential\\2025-02-24_AI-Mars-3D\\Mastcam-Z.xml"
-                    BaseDir = Some "./test_data"
+                    BaseDir = Some "./tmp/test_data"
                     ForceDownload = Some false
                     Verbose = Some true
                 }
@@ -50,7 +50,7 @@ let tests =
                     Format = ExportFormat.Ply
                     OutFile = Some "test_http_export.ply"
                     Sftp = None
-                    BaseDir = Some "./test_data"
+                    BaseDir = Some "./tmp/test_data"
                     ForceDownload = Some false
                     Verbose = Some false
                 }
@@ -69,12 +69,12 @@ let tests =
                     Data = [|
                         { Path = "sftp://server/path1_opc.zip"; Type = Some DataType.Opc; Transform = None }
                         { Path = "https://example.com/data2.zip"; Type = Some DataType.Opc; Transform = None }
-                        { Path = "./test_data"; Type = Some DataType.Opc; Transform = None }
+                        { Path = "./tmp/test_data"; Type = Some DataType.Opc; Transform = None }
                     |]
                     Format = ExportFormat.Pts
                     OutFile = Some "test_merged.pts"
                     Sftp = Some "test_sftp.xml"
-                    BaseDir = Some "./test_data"
+                    BaseDir = Some "./tmp/test_data"
                     ForceDownload = Some false
                     Verbose = Some false
                 }
@@ -100,7 +100,7 @@ let tests =
                     Format = ExportFormat.Pts
                     OutFile = Some "test_force.pts"
                     Sftp = None
-                    BaseDir = Some "./test_data"
+                    BaseDir = Some "./tmp/test_data"
                     ForceDownload = Some true  // Force re-download
                     Verbose = Some false
                 }
@@ -124,7 +124,7 @@ let tests =
                     Format = ExportFormat.Pts
                     OutFile = Some "test_cached.pts"
                     Sftp = None
-                    BaseDir = Some "./test_data"
+                    BaseDir = Some "./tmp/test_data"
                     ForceDownload = Some false  // Use cache
                     Verbose = Some false
                 }
@@ -150,7 +150,7 @@ let tests =
                     Format = ExportFormat.Pts
                     OutFile = Some "test_verbose.pts"
                     Sftp = Some "W:\\Datasets\\Pro3D\\confidential\\2025-02-24_AI-Mars-3D\\Mastcam-Z.xml"
-                    BaseDir = Some "./test_data"
+                    BaseDir = Some "./tmp/test_data"
                     ForceDownload = Some false
                     Verbose = Some true  // Enable verbose output
                 }
@@ -170,7 +170,7 @@ let tests =
                 // Given: Config with Verbose=false and empty data dir (to test minimal output on failure)
                 let config = {
                     Data = [|
-                        { Path = "./test_data"; Type = Some DataType.Opc; Transform = None }
+                        { Path = "./tmp/test_data"; Type = Some DataType.Opc; Transform = None }
                     |]
                     Format = ExportFormat.Pts
                     OutFile = Some "test_quiet.pts"

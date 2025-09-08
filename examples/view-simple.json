@@ -1,8 +1,8 @@
 {
   "command": "view",
   "data": [
-    { "path": "../data/dataset1" },
-    { "path": "../data/dataset2" }
+    { "path": "../tmp/data/dataset1" },
+    { "path": "../tmp/data/dataset2" }
   ],
   "speed": 2.0
 }

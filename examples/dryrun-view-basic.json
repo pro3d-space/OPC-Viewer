@@ -2,14 +2,14 @@
   "command": "view",
   "data": [
     {
-      "path": "./data/mars_surface_1",
+      "path": "./tmp/data/mars_surface_1",
       "type": "opc"
     },
     {
-      "path": "./data/mars_surface_2",
+      "path": "./tmp/data/mars_surface_2",
       "type": "opc"
     }
   ],
   "speed": 5.0,
-  "baseDir": "./data"
+  "baseDir": "./tmp/data"
 }

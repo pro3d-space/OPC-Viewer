@@ -77,7 +77,7 @@ This implementation enhances the export command to support remote data sources (
 **Status**: COMPLETED  
 **Time**: 2025-09-07 10:20  
 **Actions**:
-- Created `tests/PRo3D.Viewer.Tests/ExportTests.fs` with failing tests
+- Created `src/PRo3D.Viewer.Tests/ExportTests.fs` with failing tests
 - Added ExportTests to Main.fs test list
 - Added ExportTests.fs to PRo3D.Viewer.Tests.fsproj
 
@@ -131,10 +131,10 @@ These failures confirm our tests are correctly identifying the missing functiona
 ### Test Execution Plan
 ```bash
 # Run tests after each phase
-dotnet run --project tests/PRo3D.Viewer.Tests
+dotnet run --project src/PRo3D.Viewer.Tests
 
 # Verify specific test failures
-dotnet run --project tests/PRo3D.Viewer.Tests -- --filter "ExportConfig"
+dotnet run --project src/PRo3D.Viewer.Tests -- --filter "ExportConfig"
 
 # Final validation
 dotnet build -c Release

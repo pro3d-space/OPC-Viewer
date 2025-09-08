@@ -53,12 +53,12 @@ let tests =
                 Data = [||]
                 Stats = None
                 Sftp = None
-                BaseDir = Some "./data"
+                BaseDir = Some "./tmp/data"
                 ForceDownload = None
                 Verbose = None
             }
             
-            Expect.equal config.BaseDir (Some "./data") "Should have BaseDir option field"
+            Expect.equal config.BaseDir (Some "./tmp/data") "Should have BaseDir option field"
         }
         
         test "ListConfig should have ForceDownload option field" {

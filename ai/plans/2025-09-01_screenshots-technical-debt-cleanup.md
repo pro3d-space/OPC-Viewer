@@ -198,7 +198,7 @@ with
 
 **Testing Framework Setup**:
 - [✅] Add testing dependencies to paket.dependencies (Expecto 10.2.3, Expecto.FsCheck 10.2.3)
-- [✅] Create test project structure (tests/PRo3D.Viewer.Tests/)
+- [✅] Create test project structure (src/PRo3D.Viewer.Tests/)
 - [✅] Set up test data (temporary files, mock directories, JSON project files)
 - [✅] Configure test runner integration (Main.fs with Expecto CLI)
 

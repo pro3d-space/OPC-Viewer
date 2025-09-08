@@ -76,7 +76,7 @@ dotnet run --project src/PRo3D.Viewer --configuration Release -- diff path1 path
 
 ### F# Interactive (fsi)
 ```bash
-dotnet fsi scripts/debug-script.fsx
+dotnet fsi ai/scripts/debug-script.fsx
 ```
 Benefits:
 - Rapid prototyping and testing

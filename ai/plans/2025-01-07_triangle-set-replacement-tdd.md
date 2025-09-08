@@ -107,9 +107,9 @@ Replace the existing custom TriangleTree implementation with the production-read
 **Status**: ✅ COMPLETED  
 **Time**: 2025-01-07T15:40  
 **Files**: 
-- `tests/PRo3D.Viewer.Tests/TriangleSetReplacementTests.fs` (created)
-- `tests/PRo3D.Viewer.Tests/PRo3D.Viewer.Tests.fsproj` (updated)  
-- `tests/PRo3D.Viewer.Tests/Main.fs` (updated)
+- `src/PRo3D.Viewer.Tests/TriangleSetReplacementTests.fs` (created)
+- `src/PRo3D.Viewer.Tests/PRo3D.Viewer.Tests.fsproj` (updated)  
+- `src/PRo3D.Viewer.Tests/Main.fs` (updated)
 
 **Details**: 
 - Created comprehensive test file with 5 test categories
@@ -120,7 +120,7 @@ Replace the existing custom TriangleTree implementation with the production-read
 ### Phase 2.1: Verify Tests Fail (RED Phase) [COMPLETED]
 **Status**: ✅ COMPLETED  
 **Time**: 2025-01-07T15:45  
-**Command**: `dotnet build tests/PRo3D.Viewer.Tests/PRo3D.Viewer.Tests.fsproj`  
+**Command**: `dotnet build src/PRo3D.Viewer.Tests/PRo3D.Viewer.Tests.fsproj`  
 **Result**: ❌ FAILED (as expected)  
 **Errors**: 25 errors, 0 warnings  
 **Details**: 
@@ -147,11 +147,11 @@ Replace the existing custom TriangleTree implementation with the production-read
 **Files**:
 - `src/PRo3D.Viewer/TriangleSetAdapter.fs` (created)
 - `src/PRo3D.Viewer/PRo3D.Viewer.fsproj` (updated)
-- `tests/PRo3D.Viewer.Tests/paket.references` (updated)
+- `src/PRo3D.Viewer.Tests/paket.references` (updated)
 **Build Results**:
 - Main project: ✅ SUCCESS (0 errors, 0 warnings)
 - Test project: ✅ SUCCESS (0 errors, 0 warnings)
-**Test Results**: `dotnet run --project tests/PRo3D.Viewer.Tests -- --summary`
+**Test Results**: `dotnet run --project src/PRo3D.Viewer.Tests -- --summary`
 - ✅ **39 PASSED** (including 10 TriangleSet replacement tests)
 - ❌ **7 FAILED** (2 TriangleSet performance/behavioral tests + 5 unrelated export tests)  
 - ⚠️ **2 ERRORED** (unrelated SFTP export tests)
@@ -192,7 +192,7 @@ Replace the existing custom TriangleTree implementation with the production-read
 ### Phase 4: Full Integration Test [COMPLETED] 
 **Status**: ✅ COMPLETED  
 **Time**: 2025-01-07T17:00  
-**Command**: `dotnet run --project tests/PRo3D.Viewer.Tests -- --summary`  
+**Command**: `dotnet run --project src/PRo3D.Viewer.Tests -- --summary`  
 **Results**: **MAJOR SUCCESS!** 🎉  
 - ✅ **39 PASSED** (81% success rate)
 - ❌ **8 FAILED** (only 2 TriangleSet-related + 6 unrelated network/export issues)

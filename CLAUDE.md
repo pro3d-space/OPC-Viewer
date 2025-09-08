@@ -221,9 +221,9 @@ To add a new configuration field (e.g., `NewFeature: string option`):
 
 The project uses **Expecto** as the F#-idiomatic testing framework:
 
-- **Test Location**: `tests/PRo3D.Viewer.Tests/`
+- **Test Location**: `src/PRo3D.Viewer.Tests/`
 - **Test Modules**: ConfigurationTests, ProjectFileTests, ScreenshotTests, IntegrationTests
-- **Run Tests**: `dotnet run --project tests/PRo3D.Viewer.Tests`
+- **Run Tests**: `dotnet run --project src/PRo3D.Viewer.Tests`
 
 Test patterns for configuration:
 - **Unit Tests**: ConfigurationBuilder functions with various input combinations
