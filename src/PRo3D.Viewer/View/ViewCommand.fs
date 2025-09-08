@@ -252,12 +252,13 @@ module ViewCommand =
             textOverlayFunc = None
             backgroundColor = backgroundColor
             screenshotDirectory = config.Screenshots
+            version = config.Version
         }
         
         UnifiedViewer.run viewerConfig |> ignore
         0
 
-    let run (args : ParseResults<Args>) (globalScreenshots: string option) : int =
+    let run (version: string) (args : ParseResults<Args>) (globalScreenshots: string option) : int =
         // Build config directly here to avoid circular dependency
         let objFiles = 
             args.GetResult(Args.ObjFiles, defaultValue = [])
@@ -281,5 +282,6 @@ module ViewCommand =
             Screenshots = globalScreenshots
             ForceDownload = if args.Contains Args.ForceDownload then Some true else None
             Verbose = if args.Contains Args.Verbose then Some true else None
+            Version = version
         }
         execute config

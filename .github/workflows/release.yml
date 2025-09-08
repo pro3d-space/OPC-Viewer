@@ -1,0 +1,105 @@
+name: Release
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'RELEASE_NOTES.md'
+      - '**.fs'
+      - '**.fsproj'
+      - 'paket.dependencies'
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: github.repository == 'pro3d-space/OPC-Viewer'
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore tools
+        run: dotnet tool restore
+
+      - name: Check version
+        id: check_version
+        run: |
+          VERSION=$(dotnet aardpack --parse-only src/PRo3D.Viewer.sln || echo "0.0.0.0")
+          if [ "$VERSION" = "0.0.0.0" ]; then
+            echo "No valid version found in RELEASE_NOTES.md"
+            exit 0
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Found version: $VERSION"
+
+      - name: Build and Pack for Release
+        if: steps.check_version.outputs.version != '0.0.0.0'
+        run: |
+          dotnet aardpack src/PRo3D.Viewer.sln --output packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-executables:
+    needs: release
+    runs-on: ${{ matrix.os }}
+    if: needs.release.outputs.should_release == 'true'
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            runtime: win-x64
+            artifact: pro3dviewer-win-x64.exe
+          - os: ubuntu-latest
+            runtime: linux-x64
+            artifact: pro3dviewer-linux-x64
+          - os: macos-latest
+            runtime: osx-x64
+            artifact: pro3dviewer-osx-x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore tools and packages
+        run: |
+          dotnet tool restore
+          dotnet paket restore
+
+      - name: Get version
+        id: get_version
+        run: |
+          VERSION=$(dotnet aardpack --parse-only src/PRo3D.Viewer.sln || echo "0.0.0.0")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Publish executable
+        run: |
+          dotnet publish -c Release -r ${{ matrix.runtime }} --self-contained -p:PublishSingleFile=true -o publish src/PRo3D.Viewer
+
+      - name: Rename executable
+        shell: bash
+        run: |
+          cd publish
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            mv PRo3D.Viewer.exe ../pro3dviewer-v${{ steps.get_version.outputs.version }}-${{ matrix.runtime }}.exe
+          else
+            mv PRo3D.Viewer ../pro3dviewer-v${{ steps.get_version.outputs.version }}-${{ matrix.runtime }}
+            chmod +x ../pro3dviewer-v${{ steps.get_version.outputs.version }}-${{ matrix.runtime }}
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.runtime }}-executable
+          path: pro3dviewer-v${{ steps.get_version.outputs.version }}-${{ matrix.runtime }}*

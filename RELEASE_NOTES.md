@@ -4,6 +4,10 @@
 - Updated project references and build system to use NuGet package
 - Simplified test suite - no longer includes Aardvark.Data.Remote tests (handled by package)
 - All PRo3D.Viewer functionality unchanged - seamless migration
+- Added version display in window title (shows current version from RELEASE_NOTES.md)
+- Added aardpack tool for automated GitHub releases with cross-platform binaries
+- Added GitHub Actions workflow for automated releases on RELEASE_NOTES.md changes
+- Updated build scripts with publish commands for standalone executables (Windows/Linux/macOS)
 
 ## 1.1.4
 - Code polish: Improved naming conventions (FetchConfig.defaultConfig → Fetch.defaultConfig)

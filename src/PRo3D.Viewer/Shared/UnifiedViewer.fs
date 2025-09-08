@@ -71,6 +71,8 @@ type ViewerConfig = {
     backgroundColor : C4f
     /// Screenshots directory (None = default ./screenshots)
     screenshotDirectory : string option
+    /// Application version for window title
+    version : string
 }
 
 /// Unified viewer implementation
@@ -184,6 +186,7 @@ module UnifiedViewer =
 
         use app = new OpenGlApplication()
         let win = app.CreateGameWindow()
+        win.Title <- sprintf "PRo3D.Viewer v%s" config.version
         let runtime = win.Runtime
 
         let runner = 
