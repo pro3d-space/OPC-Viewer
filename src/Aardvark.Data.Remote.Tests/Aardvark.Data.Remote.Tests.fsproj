@@ -9,8 +9,7 @@
   <ItemGroup>
     <None Include="paket.references" />
     <Compile Include="DataRefTests.fs" />
-    <Compile Include="ProviderTests.fs" />
-    <Compile Include="IntegrationTests.fs" />
+    <Compile Include="ConfigBasedApiTests.fs" />
     <Compile Include="PythonSftpTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

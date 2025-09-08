@@ -3,22 +3,97 @@
 #r "nuget: SSH.NET"
 
 open System
+open System.IO
 open Aardvark.Data.Remote
 
 printfn "=== Aardvark.Data.Remote Basic Usage Examples ==="
 
-// Example 1: Simple local directory
-printfn "\n1. Local directory resolution:"
-let localResult = Fetch.Resolve "/tmp"
-match localResult with
-| Resolved path -> printfn "✓ Local directory resolved to: %s" path
+// Example 1: Simple resolution with default configuration
+printfn "\n1. Simple resolution:"
+let result1 = Fetch.resolve "test-local-dir"
+match result1 with
+| Resolved path -> printfn "✓ Resolved to: %s" path
 | InvalidPath reason -> printfn "✗ Error: %s" reason
-| _ -> printfn "✗ Unexpected result"
+| _ -> printfn "✗ Other result type"
 
-// Example 2: Parsing and validation
-printfn "\n2. Parsing and validation:"
-let inputs = [
-    "/valid/local/path"
+// Example 2: Resolution with custom configuration
+printfn "\n2. Resolution with custom configuration:"
+let customConfig = {
+    Fetch.defaultConfig with
+        baseDirectory = Path.GetTempPath()
+        maxRetries = 5
+        forceDownload = true
+}
+
+let result2 = Fetch.resolveWith customConfig "custom-test-dir"
+match result2 with
+| Resolved path -> printfn "✓ Resolved with custom config to: %s" path
+| InvalidPath reason -> printfn "✗ Error: %s" reason
+| _ -> printfn "✗ Other result type"
+
+// Example 3: Async resolution
+printfn "\n3. Async resolution:"
+async {
+    let! result = Fetch.resolveAsync "async-test-dir"
+    match result with
+    | Resolved path -> printfn "✓ Async resolved to: %s" path
+    | InvalidPath reason -> printfn "✗ Async error: %s" reason
+    | _ -> printfn "✗ Other async result type"
+} |> Async.RunSynchronously
+
+// Example 4: Async resolution with custom config
+printfn "\n4. Async resolution with custom config:"
+let configWithProgress = {
+    Fetch.defaultConfig with
+        baseDirectory = Path.GetTempPath()
+        progress = Some (fun percent -> printf "\rProgress: %.1f%%" percent)
+        logger = Some (fun level msg -> printfn "\n[%A] %s" level msg)
+}
+
+async {
+    let! result = Fetch.resolveAsyncWith configWithProgress "async-custom-test-dir"
+    match result with
+    | Resolved path -> printfn "\n✓ Async with config resolved to: %s" path
+    | InvalidPath reason -> printfn "\n✗ Async config error: %s" reason
+    | _ -> printfn "\n✗ Other async config result type"
+} |> Async.RunSynchronously
+
+// Example 5: Batch processing
+printfn "\n5. Batch processing:"
+let urls = [
+    "batch-test-1"
+    "batch-test-2" 
+    "batch-test-3"
+]
+
+async {
+    let! results = Fetch.resolveMany urls
+    
+    printfn "Batch results:"
+    for i, result in List.indexed results do
+        match result with
+        | Resolved path -> printfn "  [%d] ✓ %s -> %s" i urls.[i] path
+        | InvalidPath reason -> printfn "  [%d] ✗ %s -> Error: %s" i urls.[i] reason
+        | _ -> printfn "  [%d] ✗ %s -> Other result" i urls.[i]
+} |> Async.RunSynchronously
+
+// Example 6: Batch processing with custom config
+printfn "\n6. Batch processing with custom config:"
+async {
+    let! results = Fetch.resolveManyWith customConfig urls
+    
+    printfn "Batch results with custom config:"
+    for i, result in List.indexed results do
+        match result with
+        | Resolved path -> printfn "  [%d] ✓ %s -> %s" i urls.[i] path
+        | InvalidPath reason -> printfn "  [%d] ✗ %s -> Error: %s" i urls.[i] reason
+        | _ -> printfn "  [%d] ✗ %s -> Other result" i urls.[i]
+} |> Async.RunSynchronously
+
+// Example 7: Parsing and validation
+printfn "\n7. Parsing different URL types:"
+let testUrls = [
+    "/absolute/path"
     "relative/path"
     "http://example.com/data.zip"
     "sftp://server.com/data.zip"
@@ -26,60 +101,24 @@ let inputs = [
     ""
 ]
 
-for input in inputs do
-    let parsed = Parser.parse input
+for url in testUrls do
+    let parsed = Parser.parse url
     let isValid = Parser.isValid parsed
     let description = Parser.describe parsed
-    printfn "  %s -> Valid: %b, %s" input isValid description
+    printfn "  %s -> Valid: %b, Type: %s" url isValid description
 
-// Example 3: Configuration builder
-printfn "\n3. Configuration with builder pattern:"
-let configuredResult = 
-    Fetch
-        .From("relative/dataset")
-        .WithBaseDirectory(System.IO.Directory.GetCurrentDirectory())
-        .WithMaxRetries(5)
-        .WithTimeout(TimeSpan.FromMinutes(2.0))
-        .WithProgress(fun percent -> printf "\rProgress: %.1f%%" percent; Console.Out.Flush())
+// Example 8: Error handling patterns
+printfn "\n8. Error handling examples:"
+let testInvalidUrl = "invalid://not-supported"
+let result8 = Fetch.resolve testInvalidUrl
+match result8 with
+| Resolved path -> 
+    printfn "Unexpected success: %s" path
+| InvalidPath reason ->
+    printfn "✓ Properly caught invalid URL: %s" reason
+| DownloadError (uri, ex) ->
+    printfn "Download error for %A: %s" uri ex.Message  
+| SftpConfigMissing uri ->
+    printfn "SFTP config missing for %A" uri
 
-let config = configuredResult.GetConfig()
-printfn "  Base directory: %s" config.BaseDirectory
-printfn "  Max retries: %d" config.MaxRetries
-printfn "  Timeout: %A" config.Timeout
-printfn "  Has progress callback: %b" config.ProgressCallback.IsSome
-
-// Example 4: Error handling patterns
-printfn "\n4. Error handling patterns:"
-let testCases = [
-    ("Valid local", "/tmp")
-    ("Invalid URL", "invalid://example.com/data.zip")
-    ("Missing SFTP config", "sftp://server.com/data.zip")
-    ("Non-zip HTTP", "http://example.com/data.txt")
-]
-
-for (description, input) in testCases do
-    let result = Fetch.Resolve input
-    printf "  %s: " description
-    match result with
-    | Resolved path -> printfn "SUCCESS -> %s" path
-    | InvalidPath reason -> printfn "INVALID -> %s" reason
-    | SftpConfigMissing uri -> printfn "SFTP CONFIG MISSING -> %A" uri
-    | DownloadError (uri, ex) -> printfn "DOWNLOAD ERROR -> %s" ex.Message
-
-// Example 5: Manual resolution with custom config
-printfn "\n5. Manual resolution with custom configuration:"
-let customConfig = {
-    ResolverConfig.Default with
-        BaseDirectory = "/custom/base"
-        MaxRetries = 10
-        Timeout = TimeSpan.FromSeconds(30.0)
-}
-
-let dataRef = Parser.parse "relative/test/path"
-let manualResult = Resolver.resolve customConfig dataRef
-match manualResult with
-| Resolved path -> printfn "✓ Resolved to: %s" path
-| InvalidPath reason -> printfn "✗ Failed: %s" reason
-| _ -> printfn "✗ Other error"
-
-printfn "\n=== Examples completed ==="
+printfn "\n=== Basic Usage Examples Complete ==="

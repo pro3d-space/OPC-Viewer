@@ -1,206 +1,211 @@
-// Example showing how to use Aardvark.Data.Remote in place of original PRo3D.Viewer Data module
+// Example showing how Aardvark.Data.Remote integrates with PRo3D.Viewer
 #r "../src/Aardvark.Data.Remote/bin/Debug/net8.0/Aardvark.Data.Remote.dll"
 #r "nuget: SSH.NET"
 
 open System
+open System.IO
 open Aardvark.Data.Remote
 
 printfn "=== PRo3D.Viewer Integration Examples ==="
 
-// This demonstrates how the new library replaces the original PRo3D.Viewer functionality
+// Example 1: How PRo3D.Viewer uses the library internally
+printfn "\n1. PRo3D.Viewer Internal Usage:"
 
-// Example 1: Original PRo3D.Viewer pattern vs New library pattern
-printfn "\n1. Migration from original PRo3D.Viewer patterns:"
-
-// OLD PRo3D.Viewer approach (conceptual - this is what the wrapper now does internally):
-let simulateOldApproach (basedir: string) (input: string) =
-    printfn "  OLD: Would call resolveDataPath with basedir=%s, input=%s" basedir input
-    
-    // This is essentially what the old code did:
-    let dataRef = Parser.parse input  // Was: getDataRefFromString
-    
+// This mimics the compatibility wrapper in PRo3D.Viewer's Data.fs
+let resolveDataPath (basedir: string) (sftp: SftpConfig option) (forceDownload: bool) (logger: Logger.LogCallback option) (dataRef: DataRef) =
     let config = { 
-        ResolverConfig.Default with 
-            BaseDirectory = basedir 
+        Fetch.defaultConfig with 
+            baseDirectory = basedir
+            sftpConfig = sftp
+            forceDownload = forceDownload
+            logger = logger
+            progress = Some (fun percent -> 
+                printf "\r%.2f%%" percent
+                if percent >= 100.0 then printfn "" else System.Console.Out.Flush()
+            )
     }
     
-    let result = Resolver.resolve config dataRef  // Was: resolveDataPath
+    let result = Resolver.resolve config dataRef
     
-    // Convert to old result format for compatibility
+    // Convert to PRo3D's expected result format
     match result with
-    | Resolved path -> printfn "  OLD RESULT: Success -> %s" path
-    | InvalidPath reason -> printfn "  OLD RESULT: Invalid -> %s" reason
-    | DownloadError (uri, ex) -> printfn "  OLD RESULT: Download error -> %A, %s" uri ex.Message
-    | SftpConfigMissing uri -> printfn "  OLD RESULT: SFTP config missing -> %A" uri
+    | Resolved path -> Some path
+    | _ -> None
 
-// NEW approach with enhanced features:
-let newApproach (basedir: string) (input: string) =
-    printfn "  NEW: Using builder pattern with enhanced features"
-    
-    let result = 
-        Fetch
-            .From(input)
-            .WithBaseDirectory(basedir)
-            .WithConsoleProgress()
-            .WithMaxRetries(3)
-            .WithTimeout(TimeSpan.FromMinutes(5.0))
-            .Resolve()
-    
-    match result with
-    | Resolved path -> printfn "  NEW RESULT: Success -> %s" path
-    | InvalidPath reason -> printfn "  NEW RESULT: Invalid -> %s" reason
-    | DownloadError (uri, ex) -> printfn "  NEW RESULT: Download error -> %A, %s" uri ex.Message
-    | SftpConfigMissing uri -> printfn "  NEW RESULT: SFTP config missing -> %A" uri
+// Test the compatibility wrapper
+let testDataRef = Parser.parse "pro3d-test"
+let resolvedPath = resolveDataPath (Path.GetTempPath()) None false None testDataRef
+match resolvedPath with
+| Some path -> printfn "✓ PRo3D compatibility wrapper resolved: %s" path
+| None -> printfn "✗ PRo3D compatibility wrapper failed"
 
-// Test both approaches
-let testInput = "relative/test/data"
-let testBasedir = System.IO.Path.GetTempPath()
+// Example 2: Direct usage in PRo3D commands
+printfn "\n2. Direct Usage in PRo3D Commands:"
 
-simulateOldApproach testBasedir testInput
-newApproach testBasedir testInput
-
-// Example 2: SFTP configuration migration
-printfn "\n2. SFTP configuration migration:"
-
-// OLD: Would use PRo3D.Viewer.Sftp.SftpServerConfig
-type OldSftpConfig = {
-    Host: string
-    Port: int
-    User: string
-    Pass: string
+// This shows how PRo3D commands can use the library directly
+let viewCommandConfig = {
+    Fetch.defaultConfig with
+        baseDirectory = "./data"
+        progress = Some (fun percent -> printfn "Loading dataset: %.1f%%" percent)
+        logger = Some (fun level msg -> printfn "[%A] %s" level msg)
+        maxRetries = 3
 }
 
-let oldSftpConfig = {
-    Host = "mars-data.nasa.gov"
-    Port = 22
-    User = "scientist"
-    Pass = "secret123"
+let viewResult = Fetch.resolveWith viewCommandConfig "view-command-test"
+match viewResult with
+| Resolved path -> printfn "✓ View command resolved dataset: %s" path
+| InvalidPath reason -> printfn "✗ View command failed: %s" reason
+| _ -> printfn "✗ View command had other result"
+
+// Example 3: List command with remote data support
+printfn "\n3. List Command with Remote Data:"
+
+let listCommandConfig = {
+    Fetch.defaultConfig with
+        baseDirectory = "./cache"
+        forceDownload = false  // Use cache for listing
+        logger = Some (fun level msg -> printfn "[LIST] %s" msg)
 }
 
-// NEW: Direct mapping to new SftpConfig
-let newSftpConfig = {
-    Host = oldSftpConfig.Host
-    Port = oldSftpConfig.Port
-    User = oldSftpConfig.User
-    Pass = oldSftpConfig.Pass
-}
-
-printfn "  Converted SFTP config: %A" newSftpConfig
-
-let sftpResult = 
-    Fetch
-        .From("sftp://mars-data.nasa.gov/dataset.zip")
-        .WithSftpConfig(newSftpConfig)
-        .WithBaseDirectory("/mars-data/cache")
-        .Resolve()
-
-printfn "  SFTP resolution result: %A" sftpResult
-
-// Example 3: Batch processing for multiple datasets (common PRo3D.Viewer pattern)
-printfn "\n3. Batch processing multiple datasets (PRo3D.Viewer style):"
-
-let marsDatasets = [
-    "/local/curiosity/sol_0001"
-    "/local/curiosity/sol_0002" 
-    "http://mars-data.nasa.gov/curiosity/sol_0003.zip"
-    "sftp://secure.nasa.gov/perseverance/sol_0100.zip"
-    "relative/datasets/opportunity"
+let remoteDataSources = [
+    "local-dataset-1"
+    "local-dataset-2"
+    "remote-dataset" // Would be HTTP/SFTP in real usage
 ]
 
-// Process each dataset
-for (i, dataset) in List.indexed marsDatasets do
-    printfn "  Processing dataset %d: %s" (i + 1) dataset
+async {
+    let! listResults = Fetch.resolveManyWith listCommandConfig remoteDataSources
     
-    let result = 
-        Fetch
-            .From(dataset)
-            .WithBaseDirectory("/mars-data")
-            .WithProgress(fun p -> printf "    %.0f%% " p; Console.Out.Flush())
-            .WithMaxRetries(5)  // Mars data can be unreliable!
-            .Resolve()
-    
-    printf "\n"
-    match result with
-    | Resolved path -> 
-        printfn "    ✓ Ready for processing: %s" path
-        // In real PRo3D.Viewer, this would continue with:
-        // - Loading OPC hierarchies
-        // - Building scene graphs
-        // - Setting up viewer
-        
-    | InvalidPath reason -> 
-        printfn "    ✗ Skipping invalid dataset: %s" reason
-        
-    | DownloadError (uri, ex) -> 
-        printfn "    ✗ Download failed: %s" ex.Message
-        
-    | SftpConfigMissing uri -> 
-        printfn "    ✗ SFTP credentials needed for: %A" uri
-
-// Example 4: Error patterns common in PRo3D.Viewer
-printfn "\n4. Error handling patterns for scientific data workflows:"
-
-let processDataset (input: string) =
-    let result = 
-        Fetch
-            .From(input)
-            .WithBaseDirectory("/scientific-data/cache")
-            .WithTimeout(TimeSpan.FromHours(1.0))  // Large datasets!
-            .WithProgress(fun p -> 
-                if p % 25.0 = 0.0 then  // Log every 25%
-                    printfn "      Processing %s: %.0f%% complete" input p
-            )
-            .Resolve()
-    
-    match result with
-    | Resolved path ->
-        // Simulate scientific data validation
-        if System.IO.Directory.Exists(path) then
-            let files = System.IO.Directory.GetFiles(path, "*.xml", System.IO.SearchOption.AllDirectories)
-            if files.Length > 0 then
-                printfn "    ✓ Valid dataset with %d metadata files" files.Length
-                true
-            else
-                printfn "    ✗ Dataset missing required metadata files"
-                false
-        else
-            printfn "    ✗ Resolved path does not exist: %s" path
-            false
+    printfn "Available datasets:"
+    for i, result in List.indexed listResults do
+        let source = remoteDataSources.[i]
+        match result with
+        | Resolved path -> 
+            printfn "  [%d] %s -> %s" i source path
+            // In real PRo3D, this would scan for .opc files
+        | InvalidPath reason -> 
+            printfn "  [%d] %s -> ERROR: %s" i source reason
+        | _ -> 
+            printfn "  [%d] %s -> Other error" i source
             
-    | InvalidPath reason ->
-        printfn "    ✗ Invalid dataset reference: %s" reason
-        false
+} |> Async.RunSynchronously
+
+// Example 4: Export command with remote sources
+printfn "\n4. Export Command with Remote Sources:"
+
+let exportConfig = {
+    Fetch.defaultConfig with
+        baseDirectory = "./export-cache"
+        progress = Some (fun percent -> 
+            if percent % 10.0 = 0.0 then 
+                printfn "Export preparation: %.0f%%" percent
+        )
+}
+
+let exportSource = "export-test-dataset"
+let exportResult = Fetch.resolveWith exportConfig exportSource
+match exportResult with
+| Resolved path -> 
+    printfn "✓ Export source resolved: %s" path
+    printfn "  (Would now export OPC data to specified format)"
+| InvalidPath reason -> 
+    printfn "✗ Export failed to resolve source: %s" reason
+| _ -> 
+    printfn "✗ Export had other resolution error"
+
+// Example 5: SFTP Configuration for Mars Data
+printfn "\n5. Mars Data SFTP Configuration:"
+
+// Example of how PRo3D would configure SFTP for Mars datasets
+let marsDataConfig = {
+    Host = "dig-sftp.joanneum.at" 
+    Port = 2200
+    User = "mastcam-z"
+    Pass = "decoded-password-here"  // In real usage, decoded from FileZilla XML
+}
+
+let marsConfig = {
+    Fetch.defaultConfig with
+        baseDirectory = "./mars-data-cache"
+        sftpConfig = Some marsDataConfig
+        progress = Some (fun percent -> 
+            printfn "Downloading Mars dataset: %.1f%%" percent
+        )
+        maxRetries = 5  // Mars data is precious, retry more
+        timeout = TimeSpan.FromMinutes(30.0)  // Large datasets
+}
+
+// This would fail because SFTP server/credentials aren't real
+let marsUrl = "sftp://dig-sftp.joanneum.at:2200/Mission/0300/0320/Job_0320_8341-034-rad/result/Job_0320_8341-034-rad_opc.zip"
+let marsResult = Fetch.resolveWith marsConfig marsUrl
+match marsResult with
+| SftpConfigMissing uri -> printfn "✓ Expected - SFTP config validation working"
+| DownloadError (uri, ex) -> printfn "✓ Expected - Mars SFTP connection failed: %s" ex.Message
+| InvalidPath reason -> printfn "✓ Expected - Mars URL parsing: %s" reason
+| Resolved path -> printfn "! Unexpected success (Mars SFTP actually connected): %s" path
+
+// Example 6: FileZilla Configuration File Usage
+printfn "\n6. FileZilla Configuration File Usage:"
+
+let filezillaMarsConfig = {
+    Fetch.defaultConfig with
+        baseDirectory = "./mars-filezilla-cache"
+        sftpConfigFile = Some "W:\\Datasets\\Pro3D\\confidential\\2025-02-24_AI-Mars-3D\\Mastcam-Z.xml"
+        progress = Some (fun percent -> printfn "Mars FileZilla: %.1f%%" percent)
+}
+
+let filezillaMarsResult = Fetch.resolveWith filezillaMarsConfig marsUrl
+match filezillaMarsResult with
+| SftpConfigMissing _ -> printfn "✓ Expected - FileZilla config file not found"
+| DownloadError (_, ex) -> printfn "✓ Expected - FileZilla Mars connection: %s" ex.Message
+| InvalidPath reason -> printfn "✓ Expected - FileZilla config issue: %s" reason
+| Resolved path -> printfn "! Unexpected - FileZilla Mars success: %s" path
+
+// Example 7: Project File Integration
+printfn "\n7. Project File Integration:"
+
+// Shows how PRo3D project files would work with the new API
+type ProjectData = {
+    data: string list
+    baseDirectory: string option
+    sftp: string option  // Path to FileZilla config
+}
+
+let exampleProject = {
+    data = [
+        "local-dataset"
+        "http://example.com/remote-dataset.zip"
+        "sftp://server.com/mars-dataset.zip"
+    ]
+    baseDirectory = Some "./project-cache"
+    sftp = Some "/path/to/filezilla.xml"
+}
+
+// Convert project config to FetchConfig
+let projectConfig = {
+    Fetch.defaultConfig with
+        baseDirectory = exampleProject.baseDirectory |> Option.defaultValue Environment.CurrentDirectory
+        sftpConfigFile = exampleProject.sftp
+        progress = Some (fun percent -> printfn "Project loading: %.1f%%" percent)
+}
+
+async {
+    let! projectResults = Fetch.resolveManyWith projectConfig exampleProject.data
+    
+    printfn "Project data resolution:"
+    for i, result in List.indexed projectResults do
+        let dataSource = exampleProject.data.[i]
+        match result with
+        | Resolved path -> printfn "  ✓ %s -> %s" dataSource path
+        | InvalidPath reason -> printfn "  ✗ %s -> %s" dataSource reason
+        | SftpConfigMissing _ -> printfn "  ✗ %s -> SFTP config needed" dataSource
+        | DownloadError (_, ex) -> printfn "  ✗ %s -> Download failed: %s" dataSource ex.Message
         
-    | DownloadError (uri, ex) ->
-        printfn "    ✗ Network error downloading %A: %s" uri ex.Message
-        printfn "      Recommendation: Check network connection and retry later"
-        false
-        
-    | SftpConfigMissing uri ->
-        printfn "    ✗ SFTP authentication required for %A" uri
-        printfn "      Recommendation: Configure SFTP credentials in settings"
-        false
+} |> Async.RunSynchronously
 
-// Test error handling with various inputs
-let testDatasets = [
-    "/tmp"  // Should exist and be valid
-    "nonexistent/path"  // Invalid path
-    "http://httpbin.org/status/404"  // Will cause download error
-    "sftp://test.com/data.zip"  // Missing SFTP config
-]
-
-for dataset in testDatasets do
-    printfn "  Testing dataset: %s" dataset
-    let success = processDataset dataset
-    printfn "    Processing result: %s" (if success then "SUCCESS" else "FAILED")
-
-printfn "\n5. Migration benefits:"
-printfn "  ✓ Backward compatibility maintained"
-printfn "  ✓ Enhanced error handling and reporting"
-printfn "  ✓ Progress tracking for large downloads"
-printfn "  ✓ Configurable timeouts and retries"
-printfn "  ✓ Extensible provider system"
-printfn "  ✓ Type-safe configuration"
-printfn "  ✓ Comprehensive test coverage"
-
-printfn "\n=== PRo3D.Viewer integration examples completed ==="
+printfn "\n=== PRo3D Integration Examples Complete ==="
+printfn "\nNotes:"
+printfn "- PRo3D.Viewer now uses this library internally via the compatibility wrapper"
+printfn "- All remote data features are available in view, list, diff, export commands"
+printfn "- Project files can specify data sources as URLs, with automatic resolution"
+printfn "- SFTP support enables direct access to Mars exploration datasets"
