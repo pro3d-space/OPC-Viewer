@@ -11,7 +11,7 @@ open System.IO
 module ConfigurationBuilder =
     
     /// Build ViewConfig from command-line arguments
-    let fromViewArgs (args: ParseResults<ViewCommand.Args>) : ViewConfig =
+    let fromViewArgs (version: string) (args: ParseResults<ViewCommand.Args>) : ViewConfig =
         // Process OBJ files
         let objFiles = 
             args.GetResult(ViewCommand.Args.ObjFiles, defaultValue = [])
@@ -37,10 +37,11 @@ module ConfigurationBuilder =
             Screenshots = None  // CLI args don't have screenshots field yet - will be added later
             ForceDownload = if args.Contains ViewCommand.Args.ForceDownload then Some true else None
             Verbose = if args.Contains ViewCommand.Args.Verbose then Some true else None
+            Version = version
         }
     
     /// Build ViewConfig from parsed JSON project
-    let fromViewProject (projectDir: string) (project: ViewProject) : ViewConfig =
+    let fromViewProject (version: string) (projectDir: string) (project: ViewProject) : ViewConfig =
         // Handle unified data array
         let data =
             match project.Data with
@@ -75,10 +76,11 @@ module ConfigurationBuilder =
             Screenshots = screenshots
             ForceDownload = project.ForceDownload
             Verbose = project.Verbose
+            Version = version
         }
     
     /// Build DiffConfig from command-line arguments
-    let fromDiffArgs (args: ParseResults<DiffCommand.Args>) : DiffConfig =
+    let fromDiffArgs (version: string) (args: ParseResults<DiffCommand.Args>) : DiffConfig =
         {
             Data = args.GetResults DiffCommand.Args.DataDirs |> List.concat |> Array.ofList
             NoValue = args.TryGetResult DiffCommand.Args.NoValue
@@ -89,10 +91,11 @@ module ConfigurationBuilder =
             BackgroundColor = args.TryGetResult DiffCommand.Args.BackgroundColor
             Screenshots = None  // CLI args don't have screenshots field yet - will be added later
             ForceDownload = if args.Contains DiffCommand.Args.ForceDownload then Some true else None
+            Version = version
         }
     
     /// Build DiffConfig from parsed JSON project
-    let fromDiffProject (projectDir: string) (project: DiffProject) : DiffConfig =
+    let fromDiffProject (version: string) (projectDir: string) (project: DiffProject) : DiffConfig =
         // Resolve paths relative to project file directory
         let resolvePath = resolveProjectPath projectDir
         
@@ -113,6 +116,7 @@ module ConfigurationBuilder =
             BackgroundColor = project.BackgroundColor
             Screenshots = screenshots
             ForceDownload = project.ForceDownload
+            Version = version
         }
     
     /// Build ExportConfig from command-line arguments

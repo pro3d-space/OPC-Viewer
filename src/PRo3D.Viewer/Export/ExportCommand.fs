@@ -50,7 +50,7 @@ module ExportCommand =
             |> Option.bind FileZillaConfig.tryParseFile
         
         // Setup base directory
-        let baseDir = config.BaseDir |> Option.defaultValue "./data"
+        let baseDir = config.BaseDir |> Option.defaultValue "./tmp/data"
         let forceDownload = config.ForceDownload |> Option.defaultValue false
         
         // Log configuration if verbose

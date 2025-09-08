@@ -22,6 +22,7 @@ let tests =
                     BackgroundColor = Some "red"
                     Screenshots = Some "/screenshots"
                     ForceDownload = Some true
+                    Version = "1.0.0-test"
                 }
                 
                 // Verify all fields are properly set
@@ -60,7 +61,7 @@ let tests =
                     
                     match ProjectFile.load tempFile with
                     | ProjectConfig.DiffConfig project ->
-                        let config = PRo3D.Viewer.ConfigurationBuilder.fromDiffProject projectDir project
+                        let config = PRo3D.Viewer.ConfigurationBuilder.fromDiffProject "1.0.0-test" projectDir project
                         
                         // Verify the complete transformation
                         Expect.equal config.Data.Length 2 "Should have 2 data entries"
@@ -100,7 +101,7 @@ let tests =
                         ForceDownload = None
                     }
                     
-                    let config = PRo3D.Viewer.ConfigurationBuilder.fromDiffProject projectDir project
+                    let config = PRo3D.Viewer.ConfigurationBuilder.fromDiffProject "1.0.0-test" projectDir project
                     
                     // Check mixed path resolution
                     Expect.isTrue (config.Data[0].Contains(projectDir)) "Relative data path should be resolved"
@@ -127,6 +128,7 @@ let tests =
                     BackgroundColor = None
                     Screenshots = Some "/test"
                     ForceDownload = None
+                    Version = "1.0.0-test"
                 }
                 
                 let viewConfig : ViewConfig = {
@@ -138,6 +140,7 @@ let tests =
                     Screenshots = Some "/test"
                     ForceDownload = None
                     Verbose = None
+                    Version = "1.0.0-test"
                 }
                 
                 // Both should have Screenshots field with same value
@@ -155,6 +158,7 @@ let tests =
                     BackgroundColor = None
                     Screenshots = None
                     ForceDownload = None
+                    Version = "1.0.0-test"
                 }
                 
                 let viewConfig : ViewConfig = {
@@ -166,6 +170,7 @@ let tests =
                     Screenshots = None
                     ForceDownload = None
                     Verbose = None
+                    Version = "1.0.0-test"
                 }
                 
                 // Common fields should behave the same
@@ -213,7 +218,7 @@ let tests =
                     
                     match ProjectFile.load tempFile with
                     | ProjectConfig.DiffConfig project ->
-                        let config = PRo3D.Viewer.ConfigurationBuilder.fromDiffProject "/test" project
+                        let config = PRo3D.Viewer.ConfigurationBuilder.fromDiffProject "1.0.0-test" "/test" project
                         Expect.equal config.Data.Length 0 "Empty data array should be handled correctly"
                     | _ -> failtest "Empty data project should parse successfully"
                     

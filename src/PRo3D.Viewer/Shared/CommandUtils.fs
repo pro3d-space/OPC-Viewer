@@ -21,7 +21,7 @@ module CommandUtils =
     let resolveBaseDirectory (baseDir: string option) : string =
         match baseDir with
         | Some s -> s
-        | None -> System.IO.Path.Combine(System.Environment.CurrentDirectory, "data")
+        | None -> System.IO.Path.Combine(System.Environment.CurrentDirectory, "tmp/data")
 
     /// Parse background color with consistent error handling  
     let parseBackgroundColor (colorStr: string option) : C4f =
