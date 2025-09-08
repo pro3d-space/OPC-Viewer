@@ -38,27 +38,23 @@ module Data =
         | MissingSftpConfig of Uri
         | InvalidDataDir of string
 
-    // Use the new library with compatibility wrapper
+    // Use the new functional API with compatibility wrapper
     let resolveDataPath (basedir : string) (sftp : Aardvark.Data.Remote.SftpConfig option) (forceDownload : bool) (logger : Aardvark.Data.Remote.Logger.LogCallback option) (x : DataRef) : ResolveDataPathResult =
         
-        // Initialize providers
-        Resolver.initializeDefaultProviders()
-        
-        // Create configuration - sftp is already in correct format
-        
+        // Create FetchConfig using new functional API
         let config = { 
-            ResolverConfig.Default with 
-                BaseDirectory = basedir
-                SftpConfig = sftp
-                ForceDownload = forceDownload
-                Logger = logger
-                ProgressCallback = Some (fun percent -> 
+            Fetch.defaultConfig with 
+                baseDirectory = basedir
+                sftpConfig = sftp
+                forceDownload = forceDownload
+                logger = logger
+                progress = Some (fun percent -> 
                     printf "\r%.2f%%" percent
                     if percent >= 100.0 then printfn "" else System.Console.Out.Flush()
                 )
         }
         
-        // Resolve using new library
+        // Resolve using new functional API
         let result = Resolver.resolve config x
         
         // Convert result to old format

@@ -2,38 +2,37 @@ namespace Aardvark.Data.Remote.Providers
 
 open System
 open System.IO
-open System.Threading.Tasks
 open Renci.SshNet
 open Aardvark.Data.Remote
 open Aardvark.Data.Remote.Common
 
-/// Provider for SFTP downloads
-type SftpProvider() =
+/// Functional SFTP provider module
+module SftpProvider =
     
-    interface IDataProvider with
-        
-        member _.CanHandle(dataRef: DataRef) =
-            match dataRef with
-            | SftpZip _ -> true
-            | _ -> false
-        
-        member _.ResolveAsync config dataRef =
-            task {
+    /// Check if this provider can handle the given DataRef
+    let canHandle dataRef =
+        match dataRef with
+        | SftpZip _ -> true
+        | _ -> false
+    
+    /// Resolve a DataRef using the SFTP provider
+    let resolve (config: FetchConfig) dataRef =
+        async {
                 match dataRef with
                 | SftpZip uri ->
-                    match config.SftpConfig with
+                    match config.sftpConfig with
                     | Some sftpConfig ->
                         try
-                            let localPath = Path.Combine(config.BaseDirectory, "sftp", uri.Host, uri.AbsolutePath.TrimStart('/'))
+                            let localPath = Path.Combine(config.baseDirectory, "sftp", uri.Host, uri.AbsolutePath.TrimStart('/'))
                             
                             // Use standard download workflow
                             let sftpOperation attempt =
-                                task {
+                                async {
                                     use sftpClient = new SftpClient(sftpConfig.Host, sftpConfig.Port, sftpConfig.User, sftpConfig.Pass)
                                     sftpClient.Connect()
                                     
                                     let remotePath = uri.AbsolutePath
-                                    Logger.log config.Logger Logger.Info $"[SFTP] Downloading {remotePath} to {localPath}"
+                                    Logger.log config.logger Logger.Info $"[SFTP] Downloading {remotePath} to {localPath}"
                                     
                                     let progressReporter = Common.createRateLimitedReporter config 1000
                                     progressReporter 0.0
@@ -53,7 +52,7 @@ type SftpProvider() =
                                     fileStream.Flush()
                                     
                                     let fileInfo = FileInfo(localPath)
-                                    Logger.log config.Logger Logger.Info $"[SFTP] Downloaded {fileInfo.Length} bytes to {localPath}"
+                                    Logger.log config.logger Logger.Info $"[SFTP] Downloaded {fileInfo.Length} bytes to {localPath}"
                                     
                                     // Ensure final 100% is reported
                                     progressReporter 100.0
@@ -62,7 +61,8 @@ type SftpProvider() =
                                     return localPath
                                 }
                             
-                            let! result = Common.Download.executeWithRetry config localPath sftpOperation
+                            let sftpTask attempt = sftpOperation attempt |> Async.StartAsTask
+                            let! result = Common.Download.executeWithRetry config localPath sftpTask |> Async.AwaitTask
                             
                             match result with
                             | Ok path -> return Resolved path
@@ -76,8 +76,10 @@ type SftpProvider() =
                         
                 | _ ->
                     return InvalidPath "SftpProvider cannot handle this DataRef type"
-            }
-
-/// Module functions for the SftpProvider
-module SftpProvider =
-    let create, register = Common.Provider.createSingleton SftpProvider
+        }
+    
+    /// Provider record instance
+    let provider : Provider = {
+        canHandle = canHandle
+        resolve = resolve
+    }

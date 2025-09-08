@@ -1,3 +1,20 @@
+## 1.1.4
+- Code polish: Improved naming conventions (FetchConfig.defaultConfig → Fetch.defaultConfig)
+- Code polish: Complete migration from ResolverConfig to FetchConfig (eliminated legacy type)
+- Code polish: Simplified provider module structure, removed unnecessary nested references
+- Code polish: Optimized async patterns, removed unnecessary wrapper functions
+- Maintained 0 errors, 0 warnings throughout all changes
+- All 37 tests continue to pass, no functionality changes
+
+## 1.1.3
+- MAJOR: Refactored Aardvark.Data.Remote to idiomatic F# functional design + aligned C# config-based API
+- Replaced C#-style builder pattern with clean F# record-based configuration
+- F# API: resolve, resolveWith, resolveAsync, resolveAsyncWith, resolveMany, resolveManyWith 
+- C# API: Resolve, ResolveWith, ResolveAsync, ResolveAsyncWith, ResolveMany, ResolveManyWith
+- Converted provider system from interfaces to pure functional records
+- Removed all mutable state - providers now immutable, no initialization needed
+- All tests pass - complete functional implementation with 0 errors, 0 warnings
+
 ## 1.1.2
 - Implemented remote data support for list command 
 - Added configuration-based execution pattern to list command (matches view/diff/export)

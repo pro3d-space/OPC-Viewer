@@ -215,8 +215,6 @@ module PythonSftpTests =
         testList "Python Paramiko SFTP Tests" [
             
             testCase "Python SFTP server starts and accepts connections" <| fun _ ->
-                // Initialize providers
-                Resolver.initializeDefaultProviders()
                 
                 use server = new PythonSftpServer(2251)
                 
@@ -295,8 +293,6 @@ module PythonSftpTests =
                 Expect.isTrue true "Test completed"
             
             testCase "SFTP provider works with Python server" <| fun _ ->
-                // Initialize providers
-                Resolver.initializeDefaultProviders()
                 
                 use server = new PythonSftpServer(2252)
                 
@@ -307,14 +303,14 @@ module PythonSftpTests =
                     
                     // Configure SFTP
                     let config = {
-                        ResolverConfig.Default with
-                            SftpConfig = Some {
+                        Fetch.defaultConfig with
+                            sftpConfig = Some {
                                 Host = "localhost"
                                 Port = server.Port
                                 User = server.Username
                                 Pass = server.Password
                             }
-                            BaseDirectory = Path.GetTempPath()
+                            baseDirectory = Path.GetTempPath()
                     }
                     
                     // Test download via our SFTP provider
@@ -350,8 +346,6 @@ module PythonSftpTests =
                 Expect.isTrue true "Test completed"
             
             testCase "Python SFTP server handles multiple connections" <| fun _ ->
-                // Initialize providers
-                Resolver.initializeDefaultProviders()
                 
                 use server = new PythonSftpServer(2253)
                 
