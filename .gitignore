@@ -4,6 +4,7 @@
 *.g.fs
 /PRo3D.WebViewer/*.tmp
 /.paket
+!/.paket/Paket.Restore.targets
 /paket-files
 .vs
 /Aardvark.log
