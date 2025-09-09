@@ -2,7 +2,6 @@
   "profiles": {
     "PRo3D.Viewer": {
       "commandName": "Project",
-      "commandLineArgs": "diff -s \"W:\\Datasets\\Pro3D\\confidential\\2025-02-24_AI-Mars-3D\\Mastcam-Z.xml\" \"sftp://mastcam-z-admin@dig-sftp.joanneum.at:2200/Mission/1300/1399/Job_1399_4068-110-rad/result-AI/Job_1399_4068-110-rad_opc.zip\"  \"sftp://mastcam-z-admin@dig-sftp.joanneum.at:2200/Mission/1300/1399/Job_1399_4068-110-rad/result-NoAI/Job_1399_4068-110-rad_opc.zip\"\r\n",
       "environmentVariables": {
         "pro3d-data": "C:\\pro3ddata"
       }
