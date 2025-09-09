@@ -1,3 +1,6 @@
+## 1.1.6
+- fixed deployed release artifacts
+
 ## 1.1.5
 - MAJOR: Migrated from local Aardvark.Data.Remote project to official NuGet package v1.0.0
 - Removed ~200 local files (source code, tests, examples, build artifacts)
