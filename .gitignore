@@ -5,6 +5,7 @@
 /PRo3D.WebViewer/*.tmp
 .paket/paket.exe
 /paket-files
+/publish
 .vs
 /Aardvark.log
 /tmp/
