@@ -25,6 +25,7 @@ module DiffCommand =
         | [<AltCommandLine("-b")        >] BaseDir of string
         | [<CustomCommandLine("--background-color"); AltCommandLine("--bg")>] BackgroundColor of string
         | [<CustomCommandLine("--force-download"); AltCommandLine("-f")>] ForceDownload
+        | [<AltCommandLine("--embree")  >] UseEmbree
 
         interface IArgParserTemplate with
             member s.Usage =
@@ -37,6 +38,7 @@ module DiffCommand =
                 | BaseDir  _ -> "optional base directory for relative paths (default is ./data)"
                 | BackgroundColor _ -> "optional background color (hex: #RGB/#RRGGBB, named: black/white/red/etc, RGB: r,g,b)"
                 | ForceDownload -> "force re-download of remote data even if cached"
+                | UseEmbree -> "use Embree backend for triangle intersection (Windows only)"
 
     let execute (config : DiffConfig) : int =
 
@@ -139,8 +141,13 @@ module DiffCommand =
         //    exit 1
         //    ()
 
-        let triangleTreeMain  = TriangleSet3d(trianglesMain, options = BVHOptions.Default)
-        let triangleTreeOther = TriangleSet3d(trianglesOther, options = BVHOptions.Default)
+        let options =
+            if config.UseEmbree |> Option.defaultValue false then
+                Options(Backend = Backend.Embree)
+            else
+                Options.Default
+        let triangleTreeMain  = TriangleSet3d(trianglesMain, options = options)
+        let triangleTreeOther = TriangleSet3d(trianglesOther, options = options)
         sw.Stop()
         printfn "building tree ......... %A" sw.Elapsed
 
@@ -302,8 +309,8 @@ module DiffCommand =
     let run (version: string) (args : ParseResults<Args>) (globalScreenshots: string option) : int =
         // Build DiffConfig from command-line arguments
         let config : DiffConfig = {
-            Data = 
-                match args.TryGetResult Args.DataDirs with 
+            Data =
+                match args.TryGetResult Args.DataDirs with
                 | Some dataDirs -> dataDirs |> Array.ofList
                 | None ->
                     printfn "[WARNING] no data directories specified"
@@ -316,6 +323,7 @@ module DiffCommand =
             BackgroundColor = args.TryGetResult Args.BackgroundColor
             Screenshots = globalScreenshots
             ForceDownload = if args.Contains Args.ForceDownload then Some true else None
+            UseEmbree = if args.Contains Args.UseEmbree then Some true else None
             Version = version
         }
         execute config
