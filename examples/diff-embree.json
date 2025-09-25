@@ -1,0 +1,9 @@
+{
+  "command": "diff",
+  "data": [
+    "../tmp/data/layer-2023",
+    "../tmp/data/layer-2024"
+  ],
+  "useEmbree": true,
+  "verbose": true
+}

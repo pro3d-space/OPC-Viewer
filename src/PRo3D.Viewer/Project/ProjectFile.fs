@@ -45,6 +45,7 @@ type DiffProject = {
     BackgroundColor: string option
     Screenshots: string option
     ForceDownload: bool option
+    UseEmbree: bool option
 }
 
 /// List command project configuration - strongly typed public API
@@ -283,12 +284,18 @@ module ProjectFile =
                                 | true, prop when prop.ValueKind = JsonValueKind.String -> Some (prop.GetString())
                                 | _ -> None
                                 
-                            let forceDownload = 
+                            let forceDownload =
                                 match root.TryGetProperty("forceDownload") with
                                 | true, prop when prop.ValueKind = JsonValueKind.True -> Some true
                                 | true, prop when prop.ValueKind = JsonValueKind.False -> Some false
                                 | _ -> None
-                            
+
+                            let useEmbree =
+                                match root.TryGetProperty("useEmbree") with
+                                | true, prop when prop.ValueKind = JsonValueKind.True -> Some true
+                                | true, prop when prop.ValueKind = JsonValueKind.False -> Some false
+                                | _ -> None
+
                             // Create strongly-typed public DiffProject
                             let diffProject : DiffProject = {
                                 Command = command
@@ -301,6 +308,7 @@ module ProjectFile =
                                 BackgroundColor = backgroundColor
                                 Screenshots = screenshots
                                 ForceDownload = forceDownload
+                                UseEmbree = useEmbree
                             }
                             DiffConfig diffProject
                     | Some dirs -> InvalidConfig (sprintf "Diff command requires exactly 2 data entries, got %d" dirs.Length)

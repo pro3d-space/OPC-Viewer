@@ -61,6 +61,7 @@ module DryRunSerializer =
             BackgroundColor = args.TryGetResult DiffCommand.Args.BackgroundColor
             Screenshots = globalScreenshots
             ForceDownload = if args.Contains DiffCommand.Args.ForceDownload then Some true else None
+            UseEmbree = if args.Contains DiffCommand.Args.UseEmbree then Some true else None
         }
     
     /// Converts List command arguments to ListProject

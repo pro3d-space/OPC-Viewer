@@ -33,6 +33,7 @@ module Configuration =
         BackgroundColor: string option
         Screenshots: string option
         ForceDownload: bool option
+        UseEmbree: bool option  // Use Embree backend for triangle intersection
         Version: string  // Application version for display
     }
     

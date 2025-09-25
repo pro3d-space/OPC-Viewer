@@ -9,7 +9,7 @@ let tests =
         
         testList "DiffConfig" [
             test "includes verbose flag when set" {
-                let config = { 
+                let config = {
                     Data = [||]
                     NoValue = None
                     Speed = None
@@ -19,13 +19,14 @@ let tests =
                     BackgroundColor = None
                     Screenshots = None
                     ForceDownload = None
+                    UseEmbree = None
                     Version = "1.0.0-test"
                 }
                 Expect.equal config.Verbose (Some true) "Verbose should be set to true"
             }
             
             test "handles None verbose flag" {
-                let config = { 
+                let config = {
                     Data = [||]
                     NoValue = None
                     Speed = None
@@ -35,13 +36,14 @@ let tests =
                     BackgroundColor = None
                     Screenshots = None
                     ForceDownload = None
+                    UseEmbree = None
                     Version = "1.0.0-test"
                 }
                 Expect.equal config.Verbose None "Verbose should be None"
             }
             
             test "handles all optional fields as None" {
-                let config = { 
+                let config = {
                     Data = [||]
                     NoValue = None
                     Speed = None
@@ -51,6 +53,7 @@ let tests =
                     BackgroundColor = None
                     Screenshots = None
                     ForceDownload = None
+                    UseEmbree = None
                     Version = "1.0.0-test"
                 }
                 Expect.isTrue (config.NoValue.IsNone) "NoValue should be None"
@@ -64,7 +67,7 @@ let tests =
             
             test "handles data array correctly" {
                 let testData = [|"path1"; "path2"|]
-                let config = { 
+                let config = {
                     Data = testData
                     NoValue = None
                     Speed = None
@@ -74,10 +77,43 @@ let tests =
                     BackgroundColor = None
                     Screenshots = None
                     ForceDownload = None
+                    UseEmbree = None
                     Version = "1.0.0-test"
                 }
                 Expect.equal config.Data testData "Data array should match input"
                 Expect.equal config.Data.Length 2 "Data array should have 2 elements"
+            }
+
+            test "handles UseEmbree flag correctly" {
+                let configWithEmbree = {
+                    Data = [||]
+                    NoValue = None
+                    Speed = None
+                    Verbose = None
+                    Sftp = None
+                    BaseDir = None
+                    BackgroundColor = None
+                    Screenshots = None
+                    ForceDownload = None
+                    UseEmbree = Some true
+                    Version = "1.0.0-test"
+                }
+                let configWithoutEmbree = {
+                    Data = [||]
+                    NoValue = None
+                    Speed = None
+                    Verbose = None
+                    Sftp = None
+                    BaseDir = None
+                    BackgroundColor = None
+                    Screenshots = None
+                    ForceDownload = None
+                    UseEmbree = None
+                    Version = "1.0.0-test"
+                }
+
+                Expect.equal configWithEmbree.UseEmbree (Some true) "UseEmbree should be Some true"
+                Expect.equal configWithoutEmbree.UseEmbree None "UseEmbree should be None when not set"
             }
         ]
         

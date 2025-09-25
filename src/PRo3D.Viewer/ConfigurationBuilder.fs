@@ -91,6 +91,7 @@ module ConfigurationBuilder =
             BackgroundColor = args.TryGetResult DiffCommand.Args.BackgroundColor
             Screenshots = None  // CLI args don't have screenshots field yet - will be added later
             ForceDownload = if args.Contains DiffCommand.Args.ForceDownload then Some true else None
+            UseEmbree = if args.Contains DiffCommand.Args.UseEmbree then Some true else None
             Version = version
         }
     
@@ -116,6 +117,7 @@ module ConfigurationBuilder =
             BackgroundColor = project.BackgroundColor
             Screenshots = screenshots
             ForceDownload = project.ForceDownload
+            UseEmbree = project.UseEmbree
             Version = version
         }
     
