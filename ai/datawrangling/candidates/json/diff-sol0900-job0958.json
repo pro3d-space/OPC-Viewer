@@ -1,0 +1,12 @@
+{
+  "command": "diff",
+  "data": [
+    "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0958/Job_0958_8980-110-rad-AI/result/Job_0958_8980-110-rad-AI_opc.zip",
+    "sftp://mastcam-z@dig-sftp.joanneum.at:2200/Mission/0900/0958/Job_0958_8980-110-rad/result/Job_0958_8980-110-rad_opc.zip"
+  ],
+  "sftp": "W:\\Datasets\\Pro3D\\confidential\\2025-02-24_AI-Mars-3D\\Mastcam-Z.xml",
+  "screenshots": "./screenshots",
+  "speed": 1.0,
+  "verbose": true,
+  "useEmbree": false
+}
