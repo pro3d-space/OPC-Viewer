@@ -31,6 +31,7 @@ type ViewProject = {
     BackgroundColor: string option
     Screenshots: string option
     ForceDownload: bool option
+    CameraOutlierPercentile: float option
 }
 
 /// Diff command project configuration - strongly typed public API
@@ -46,6 +47,7 @@ type DiffProject = {
     Screenshots: string option
     ForceDownload: bool option
     UseEmbree: bool option
+    CameraOutlierPercentile: float option
 }
 
 /// List command project configuration - strongly typed public API
@@ -175,12 +177,17 @@ module ProjectFile =
                         | true, prop when prop.ValueKind = JsonValueKind.String -> Some (prop.GetString())
                         | _ -> None
                         
-                    let forceDownload = 
+                    let forceDownload =
                         match root.TryGetProperty("forceDownload") with
                         | true, prop when prop.ValueKind = JsonValueKind.True -> Some true
                         | true, prop when prop.ValueKind = JsonValueKind.False -> Some false
                         | _ -> None
-                    
+
+                    let cameraOutlierPercentile =
+                        match root.TryGetProperty("cameraOutlierPercentile") with
+                        | true, prop when prop.ValueKind = JsonValueKind.Number -> Some (prop.GetDouble())
+                        | _ -> None
+
                     // Validate paths
                     let hasDangerousPath = 
                         data
@@ -203,6 +210,7 @@ module ProjectFile =
                             Screenshots = screenshots
                             ForceDownload = forceDownload
                             Verbose = verbose
+                            CameraOutlierPercentile = cameraOutlierPercentile
                         }
                         ViewConfig viewProject
         with
@@ -296,6 +304,11 @@ module ProjectFile =
                                 | true, prop when prop.ValueKind = JsonValueKind.False -> Some false
                                 | _ -> None
 
+                            let cameraOutlierPercentile =
+                                match root.TryGetProperty("cameraOutlierPercentile") with
+                                | true, prop when prop.ValueKind = JsonValueKind.Number -> Some (prop.GetDouble())
+                                | _ -> None
+
                             // Create strongly-typed public DiffProject
                             let diffProject : DiffProject = {
                                 Command = command
@@ -309,6 +322,7 @@ module ProjectFile =
                                 Screenshots = screenshots
                                 ForceDownload = forceDownload
                                 UseEmbree = useEmbree
+                                CameraOutlierPercentile = cameraOutlierPercentile
                             }
                             DiffConfig diffProject
                     | Some dirs -> InvalidConfig (sprintf "Diff command requires exactly 2 data entries, got %d" dirs.Length)
@@ -518,11 +532,12 @@ module ProjectFile =
         project.BaseDir |> Option.iter (fun s -> writer.WriteString("baseDir", s))
         project.BackgroundColor |> Option.iter (fun s -> writer.WriteString("backgroundColor", s))
         project.ForceDownload |> Option.iter (fun f -> writer.WriteBoolean("forceDownload", f))
-        
+        project.CameraOutlierPercentile |> Option.iter (fun c -> writer.WriteNumber("cameraOutlierPercentile", c))
+
         writer.WriteEndObject()
         writer.Flush()
         Encoding.UTF8.GetString(stream.ToArray())
-    
+
     /// Serializes a DiffProject to JSON string
     let serializeDiffProject (project: DiffProject) : string =
         use stream = new MemoryStream()
@@ -549,11 +564,12 @@ module ProjectFile =
         project.BaseDir |> Option.iter (fun s -> writer.WriteString("baseDir", s))
         project.BackgroundColor |> Option.iter (fun s -> writer.WriteString("backgroundColor", s))
         project.ForceDownload |> Option.iter (fun f -> writer.WriteBoolean("forceDownload", f))
-        
+        project.CameraOutlierPercentile |> Option.iter (fun c -> writer.WriteNumber("cameraOutlierPercentile", c))
+
         writer.WriteEndObject()
         writer.Flush()
         Encoding.UTF8.GetString(stream.ToArray())
-    
+
     /// Serializes a ListProject to JSON string
     let serializeListProject (project: ListProject) : string =
         use stream = new MemoryStream()

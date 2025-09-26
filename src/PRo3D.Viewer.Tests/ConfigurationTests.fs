@@ -20,6 +20,7 @@ let tests =
                     Screenshots = None
                     ForceDownload = None
                     UseEmbree = None
+                    CameraOutlierPercentile = None
                     Version = "1.0.0-test"
                 }
                 Expect.equal config.Verbose (Some true) "Verbose should be set to true"
@@ -37,6 +38,7 @@ let tests =
                     Screenshots = None
                     ForceDownload = None
                     UseEmbree = None
+                    CameraOutlierPercentile = None
                     Version = "1.0.0-test"
                 }
                 Expect.equal config.Verbose None "Verbose should be None"
@@ -54,6 +56,7 @@ let tests =
                     Screenshots = None
                     ForceDownload = None
                     UseEmbree = None
+                    CameraOutlierPercentile = None
                     Version = "1.0.0-test"
                 }
                 Expect.isTrue (config.NoValue.IsNone) "NoValue should be None"
@@ -78,6 +81,7 @@ let tests =
                     Screenshots = None
                     ForceDownload = None
                     UseEmbree = None
+                    CameraOutlierPercentile = None
                     Version = "1.0.0-test"
                 }
                 Expect.equal config.Data testData "Data array should match input"
@@ -96,6 +100,7 @@ let tests =
                     Screenshots = None
                     ForceDownload = None
                     UseEmbree = Some true
+                    CameraOutlierPercentile = None
                     Version = "1.0.0-test"
                 }
                 let configWithoutEmbree = {
@@ -109,6 +114,7 @@ let tests =
                     Screenshots = None
                     ForceDownload = None
                     UseEmbree = None
+                    CameraOutlierPercentile = None
                     Version = "1.0.0-test"
                 }
 
@@ -128,6 +134,7 @@ let tests =
                     Screenshots = None
                     ForceDownload = None
                     Verbose = None
+                    CameraOutlierPercentile = None
                     Version = "1.0.0-test"
                 }
                 Expect.equal config.Data.Length 0 "Empty data array should have length 0"
@@ -144,6 +151,7 @@ let tests =
                     Screenshots = screenshotPath
                     ForceDownload = None
                     Verbose = None
+                    CameraOutlierPercentile = None
                     Version = "1.0.0-test"
                 }
                 Expect.equal config.Screenshots screenshotPath "Screenshots path should match"

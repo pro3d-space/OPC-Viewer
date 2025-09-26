@@ -117,6 +117,7 @@ let tests =
                         Screenshots = Some "./screenshots"
                         ForceDownload = Some true
                         UseEmbree = Some true
+                        CameraOutlierPercentile = None
                     }
                     
                     let config = PRo3D.Viewer.ConfigurationBuilder.fromDiffProject "1.0.0-test" projectDir project

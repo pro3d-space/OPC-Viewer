@@ -19,6 +19,7 @@ module Configuration =
         Screenshots: string option
         ForceDownload: bool option
         Verbose: bool option
+        CameraOutlierPercentile: float option  // Percentile to trim outliers for camera positioning (default: 2.5)
         Version: string  // Application version for display
     }
     
@@ -34,6 +35,7 @@ module Configuration =
         Screenshots: string option
         ForceDownload: bool option
         UseEmbree: bool option  // Use Embree backend for triangle intersection
+        CameraOutlierPercentile: float option  // Percentile to trim outliers for camera positioning (default: 2.5)
         Version: string  // Application version for display
     }
     

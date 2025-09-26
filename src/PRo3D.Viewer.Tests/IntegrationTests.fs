@@ -23,6 +23,7 @@ let tests =
                     Screenshots = Some "/screenshots"
                     ForceDownload = Some true
                     UseEmbree = Some true
+                    CameraOutlierPercentile = None
                     Version = "1.0.0-test"
                 }
                 
@@ -101,6 +102,7 @@ let tests =
                         Screenshots = Some "./relative-screenshots"
                         ForceDownload = None
                         UseEmbree = None
+                        CameraOutlierPercentile = None
                     }
                     
                     let config = PRo3D.Viewer.ConfigurationBuilder.fromDiffProject "1.0.0-test" projectDir project
@@ -131,6 +133,7 @@ let tests =
                     Screenshots = Some "/test"
                     ForceDownload = None
                     UseEmbree = None
+                    CameraOutlierPercentile = None
                     Version = "1.0.0-test"
                 }
                 
@@ -143,6 +146,7 @@ let tests =
                     Screenshots = Some "/test"
                     ForceDownload = None
                     Verbose = None
+                    CameraOutlierPercentile = None
                     Version = "1.0.0-test"
                 }
                 
@@ -162,6 +166,7 @@ let tests =
                     Screenshots = None
                     ForceDownload = None
                     UseEmbree = None
+                    CameraOutlierPercentile = None
                     Version = "1.0.0-test"
                 }
                 
@@ -174,6 +179,7 @@ let tests =
                     Screenshots = None
                     ForceDownload = None
                     Verbose = None
+                    CameraOutlierPercentile = None
                     Version = "1.0.0-test"
                 }
                 
