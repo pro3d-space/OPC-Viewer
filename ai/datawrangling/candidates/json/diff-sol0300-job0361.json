@@ -8,5 +8,6 @@
   "screenshots": "./screenshots",
   "speed": 1.0,
   "verbose": true,
-  "useEmbree": false
+  "useEmbree": true,
+  "cameraOutlierPercentile": 10.0
 }

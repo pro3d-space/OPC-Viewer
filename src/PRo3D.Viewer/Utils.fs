@@ -170,6 +170,11 @@ module Utils =
         let sky = gbb.Center.Normalized
         sky
 
+    /// Gets global bounding box of given patch hierarchy.
+    let getGlobalBoundingBox (patchHierarchy : PatchHierarchy) : Box3d =
+        let rootPatch = match patchHierarchy.tree with | QTree.Node (n, _) -> n | QTree.Leaf n -> n
+        rootPatch.info.GlobalBoundingBox
+
     /// Gets root patch of given patch hierarchy.
     let getRootPatch (patchHierarchy : PatchHierarchy) : Patch =
         match patchHierarchy.tree with | QTree.Node (n, _) -> n | QTree.Leaf n -> n
@@ -261,6 +266,34 @@ module Utils =
         |> Seq.collect (getTrianglesPatch excludeNaN hierarchy)
         |> List.ofSeq
 
+    /// Creates a robust bounding box by excluding outliers based on percentile trimming.
+    /// For each axis, removes the specified percentile from both extremes.
+    let createRobustBoundingBox (points : V3d list) (outlierPercentile : float) : Box3d =
+        if points.IsEmpty then
+            Box3d.Invalid
+        else
+            let count = List.length points
+            let trimCount = int(float count * outlierPercentile / 100.0)
+            let keepCount = count - (2 * trimCount)
+
+            if keepCount <= 0 then
+                // Fallback to all points if trimming would remove everything
+                Box3d(points)
+            else
+                // Sort and trim each axis independently for better outlier handling
+                let xValues = points |> List.map (fun p -> p.X) |> List.sort
+                let yValues = points |> List.map (fun p -> p.Y) |> List.sort
+                let zValues = points |> List.map (fun p -> p.Z) |> List.sort
+
+                let xTrimmed = xValues |> List.skip trimCount |> List.take keepCount
+                let yTrimmed = yValues |> List.skip trimCount |> List.take keepCount
+                let zTrimmed = zValues |> List.skip trimCount |> List.take keepCount
+
+                let minPoint = V3d(List.head xTrimmed, List.head yTrimmed, List.head zTrimmed)
+                let maxPoint = V3d(List.last xTrimmed, List.last yTrimmed, List.last zTrimmed)
+
+                Box3d(minPoint, maxPoint)
+
     let createInitialCameraView (gbb : Box3d) : CameraViewAndNearFar =
         let globalSky = gbb.Center.Normalized
         let plane = Plane3d(globalSky, 0.0)
@@ -279,6 +312,16 @@ module Utils =
         let near = far / 1024.0
 
         { CameraView = cam; Near = near;  Far = far }
+
+    /// Creates initial camera view using a robust bounding box that excludes outliers.
+    /// This provides better camera positioning when the dataset contains degenerate triangles.
+    let createInitialCameraViewRobust (points : V3d list) (outlierPercentile : float) : CameraViewAndNearFar =
+        let robustBB = createRobustBoundingBox points outlierPercentile
+        if robustBB.IsValid then
+            createInitialCameraView robustBB
+        else
+            // Fallback to original method if robust calculation fails
+            createInitialCameraView (Box3d(points))
 
     /// Parses a background color string into C4f.
     /// Supports hex colors (#RGB, #RRGGBB), named colors, and RGB values (r,g,b).

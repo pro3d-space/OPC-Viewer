@@ -2,6 +2,7 @@
   "profiles": {
     "PRo3D.Viewer": {
       "commandName": "Project",
+      "commandLineArgs": "C:\\Data\\Development\\OPC-Viewer\\examples\\diff-ai-comparison.json",
       "environmentVariables": {
         "pro3d-data": "C:\\pro3ddata"
       }

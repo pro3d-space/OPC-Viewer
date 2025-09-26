@@ -6,7 +6,8 @@
   ],
   "sftp": "W:\\Datasets\\Pro3D\\confidential\\2025-02-24_AI-Mars-3D\\Mastcam-Z.xml",
   "screenshots": "E:\\tmp\\screenshots test",
+  "backgroundColor": "white",
   "speed": 1.0,
   "verbose": true,
-  "useEmbree": false
+  "useEmbree": true
 }
