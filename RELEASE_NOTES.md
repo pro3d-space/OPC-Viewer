@@ -1,3 +1,7 @@
+## 1.1.7
+- experimental embree support (disabled by default, use --embree)
+- experimental closest point diff (toggle with M key)
+
 ## 1.1.6
 - fixed deployed release artifacts
 
