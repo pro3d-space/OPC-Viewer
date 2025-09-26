@@ -207,7 +207,19 @@ module ViewCommand =
                 combinedBox
 
         // create OpcScene ...
-        let initialCam = Utils.createInitialCameraView gbb
+        let initialCam =
+            match config.CameraOutlierPercentile with
+            | Some outlierPercentile when not patches.IsEmpty ->
+                // Use robust camera calculation with individual points
+                printfn "[INFO] Using robust camera calculation with %g%% outlier trimming" outlierPercentile
+                let allPoints =
+                    patchHierarchies
+                    |> Seq.collect (Utils.getPoints true)
+                    |> List.ofSeq
+                Utils.createInitialCameraViewRobust allPoints outlierPercentile
+            | _ ->
+                // Use standard patch-based bounding box calculation
+                Utils.createInitialCameraView gbb
         let speed = config.Speed |> Option.defaultValue (initialCam.Far / 64.0)
         
         // Determine OPC transformation - use first non-identity transform or identity
@@ -282,6 +294,7 @@ module ViewCommand =
             Screenshots = globalScreenshots
             ForceDownload = if args.Contains Args.ForceDownload then Some true else None
             Verbose = if args.Contains Args.Verbose then Some true else None
+            CameraOutlierPercentile = None  // Not supported in CLI, use project files
             Version = version
         }
         execute config

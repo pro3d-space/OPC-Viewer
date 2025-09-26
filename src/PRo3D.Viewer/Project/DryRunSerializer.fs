@@ -41,6 +41,7 @@ module DryRunSerializer =
             Screenshots = globalScreenshots
             ForceDownload = if args.Contains ViewCommand.Args.ForceDownload then Some true else None
             Verbose = if args.Contains ViewCommand.Args.Verbose then Some true else None
+            CameraOutlierPercentile = None
         }
     
     /// Converts Diff command arguments to DiffProject
@@ -61,6 +62,8 @@ module DryRunSerializer =
             BackgroundColor = args.TryGetResult DiffCommand.Args.BackgroundColor
             Screenshots = globalScreenshots
             ForceDownload = if args.Contains DiffCommand.Args.ForceDownload then Some true else None
+            UseEmbree = if args.Contains DiffCommand.Args.UseEmbree then Some true else None
+            CameraOutlierPercentile = None
         }
     
     /// Converts List command arguments to ListProject

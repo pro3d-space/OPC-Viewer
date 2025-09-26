@@ -25,6 +25,7 @@ module DiffCommand =
         | [<AltCommandLine("-b")        >] BaseDir of string
         | [<CustomCommandLine("--background-color"); AltCommandLine("--bg")>] BackgroundColor of string
         | [<CustomCommandLine("--force-download"); AltCommandLine("-f")>] ForceDownload
+        | [<CustomCommandLine("--embree")  >] UseEmbree
 
         interface IArgParserTemplate with
             member s.Usage =
@@ -37,6 +38,7 @@ module DiffCommand =
                 | BaseDir  _ -> "optional base directory for relative paths (default is ./data)"
                 | BackgroundColor _ -> "optional background color (hex: #RGB/#RRGGBB, named: black/white/red/etc, RGB: r,g,b)"
                 | ForceDownload -> "force re-download of remote data even if cached"
+                | UseEmbree -> "use Embree backend for triangle intersection (Windows only)"
 
     let execute (config : DiffConfig) : int =
 
@@ -119,30 +121,18 @@ module DiffCommand =
         let trianglesOtherWithNaN = Utils.getTriangles false hierarchyOther
         let trianglesOther = trianglesOtherWithNaN |> List.filter Utils.isValidTriangle |> Array.ofList
 
+        ///////////////////////////////////////////////////////////////////////
+        // build TriangleSet3d for both datasets
+        // (for fast intersection and closest point queries)
+        ///////////////////////////////////////////////////////////////////////
+        printfn "building triangle sets ........."
         let sw = Stopwatch.StartNew()
-        
-        //do
-        //    let groups =
-        //        trianglesOther
-        //        |> Seq.collect (fun t -> [(t.P0, t); (t.P1, t); (t.P2, t)])
-        //        |> Seq.groupBy fst
-        //        |> Seq.map (fun (k,v) -> (k, v |> Seq.map snd |> Seq.toList))
-        //        |> Seq.sortByDescending (fun (k, v) -> v.Length)
-        //        |> Seq.toList
-
-        //    printfn "groups: %d" groups.Length
-        //    for (k, ts) in groups do
-        //        printfn "  group (%d entries) with key %A" ts.Length (k.Round(3))
-        //        for t in ts do
-        //            printfn "    %A | %A | %A" (t.P0.Round(3)) (t.P1.Round(3)) (t.P2.Round(3))
-
-        //    exit 1
-        //    ()
-
-        let triangleTreeMain  = TriangleSet3d(trianglesMain, options = BVHOptions.Default)
-        let triangleTreeOther = TriangleSet3d(trianglesOther, options = BVHOptions.Default)
+        let backend = if config.UseEmbree |> Option.defaultValue false then Backend.Embree else Backend.Default
+        let options = Options(Backend = backend)
+        let triangleTreeMain  = TriangleSet3d(trianglesMain, options = options)
+        let triangleTreeOther = TriangleSet3d(trianglesOther, options = options)
         sw.Stop()
-        printfn "building tree ......... %A" sw.Elapsed
+        printfn "building triangle sets ......... %A" sw.Elapsed
 
         let pointsMain = Utils.getPoints true hierarchyMain
         let gbb = Box3d(pointsMain)
@@ -153,7 +143,14 @@ module DiffCommand =
         let rangeDist = Range1d.Invalid
         let rangeT = Range1d.Invalid
         let mutable qs = List.empty<(V3d*V3d*float)>
+
+        let rangeNearest = Range1d.Invalid
         for pGlobal in pointsMain do
+
+            do
+                let x = triangleTreeOther.GetNearestPoint(pGlobal)
+                let d = sqrt x.DistanceSquared
+                rangeNearest.ExtendBy(d)
 
             let ray = Ray3d(pGlobal, sky)
             let hit = triangleTreeOther.IntersectRay(ray)
@@ -168,61 +165,59 @@ module DiffCommand =
                 let p = g + sky * t
                 let p' = w2p.TransformPos p
                 
-
                 qs <- (pGlobal, p', t) :: qs
                 rangeDist.ExtendBy(dist)
                 rangeT.ExtendBy(t)
-                //if i % 1000 = 0 then
-                //    printfn "[%10d/%d][%d hits] hit dist %16.3f %16.3f" i pointsMain.Length countHits dist t
                 ()
             | None ->
-                //if i % 1000 = 0 then
-                //    printfn "[%10d/%d][%d hits] no hit" i pointsMain.Length countHits
                 ()
         sw.Stop()
         printfn "computing distances ... %A" sw.Elapsed
 
         printfn "%d hits / %d points" countHits pointsMain.Length
-        printfn "range dist: %A" rangeDist
-        printfn "range T   : %A" rangeT
+        printfn "range dist    : %A" rangeDist
+        printfn "range T       : %A" rangeT
+        printfn "range nearest : %A" rangeNearest
 
         let p2c = Dictionary<V3d,C3b>()
 
-        if false then // debug
-            let outfile = @"E:\qs.pts"
+        //if false then // debug
+        //    let outfile = @"E:\qs.pts"
 
-            let max = max (abs rangeT.Min) (abs rangeT.Max)
+        //    let max = max (abs rangeT.Min) (abs rangeT.Max)
 
-            use f = new StreamWriter(outfile)
-            for (pGlobal,p,t) in qs do
-                let w = float32(t / max)
-                let c =
-                    if w < 0.0f then
-                        let w = -w
-                        C3b(C3f.Blue * w + C3f.White * (1.0f - w))
-                    else
-                        C3b(C3f.Red * w + C3f.White * (1.0f - w))
+        //    use f = new StreamWriter(outfile)
+        //    for (pGlobal,p,t) in qs do
+        //        let w = float32(t / max)
+        //        let c =
+        //            if w < 0.0f then
+        //                let w = -w
+        //                C3b(C3f.Blue * w + C3f.White * (1.0f - w))
+        //            else
+        //                C3b(C3f.Red * w + C3f.White * (1.0f - w))
 
-                p2c[pGlobal] <- c
+        //        p2c[pGlobal] <- c
 
-                sprintf "%f %f %f %i %i %i" p.X p.Y p.Z c.R c.G c.B |> f.WriteLine
+        //        sprintf "%f %f %f %i %i %i" p.X p.Y p.Z c.R c.G c.B |> f.WriteLine
 
-            printfn "exported diff point cloud to %s" outfile
+        //    printfn "exported diff point cloud to %s" outfile
 
-            use fHisto = new StreamWriter(outfile + ".csv")
-            let histo = qs |> Seq.groupBy (fun (_,_,t) -> int(t*1000.0)) |> Seq.map (fun (key, xs) -> (key, xs |> Seq.length)) |> Seq.sortBy (fun (k,_) -> k) |> Seq.toList
-            for (k,count) in histo do
-                let line = sprintf "%i,%i" k count
-                //printfn "%s" line
-                fHisto.WriteLine line
+        //    use fHisto = new StreamWriter(outfile + ".csv")
+        //    let histo = qs |> Seq.groupBy (fun (_,_,t) -> int(t*1000.0)) |> Seq.map (fun (key, xs) -> (key, xs |> Seq.length)) |> Seq.sortBy (fun (k,_) -> k) |> Seq.toList
+        //    for (k,count) in histo do
+        //        let line = sprintf "%i,%i" k count
+        //        //printfn "%s" line
+        //        fHisto.WriteLine line
 
-            ()
+        //    ()
 
         
  
 
         // create OpcScene ...
-        let initialCam = Utils.createInitialCameraView gbb
+        // Use robust camera calculation to handle degenerate triangles/outliers
+        let outlierPercentile = config.CameraOutlierPercentile |> Option.defaultValue 2.5
+        let initialCam = Utils.createInitialCameraViewRobust pointsMain outlierPercentile
         let speed = config.Speed |> Option.defaultValue (initialCam.Far / 64.0)
         let scene =
             { 
@@ -242,8 +237,13 @@ module DiffCommand =
         let getColor (mode : DistanceComputationMode) (p : V3d) : C3b =
 
             match mode with
-            | DistanceComputationMode.Nearest -> C3b.Red
-            | _ -> 
+            | DistanceComputationMode.Nearest ->
+                let x = triangleTreeOther.GetNearestPoint(p)
+                let d = sqrt x.DistanceSquared
+                let w = System.Math.Pow(System.Math.Min(rangeNearest.Max, d) / rangeNearest.Max, 0.25) |> float32
+                C3b(C3f.White * (1.0f - w) + C3f.Red * w)
+
+            | DistanceComputationMode.Sky -> 
                 match (false, C3b.White) (*p2c.TryGetValue(p)*) with
                 | (true, c) when false -> 
                     //printfn "haha %A" c
@@ -257,6 +257,7 @@ module DiffCommand =
                     | Some (dist, t) ->
                         //printfn "%A" t
                         let w = float32(t / max)
+                        //let w = System.Math.Pow(float w0, 0.5) |> float32
                         let c =
                             if w < 0.0f then
                                 let w = -w
@@ -302,8 +303,8 @@ module DiffCommand =
     let run (version: string) (args : ParseResults<Args>) (globalScreenshots: string option) : int =
         // Build DiffConfig from command-line arguments
         let config : DiffConfig = {
-            Data = 
-                match args.TryGetResult Args.DataDirs with 
+            Data =
+                match args.TryGetResult Args.DataDirs with
                 | Some dataDirs -> dataDirs |> Array.ofList
                 | None ->
                     printfn "[WARNING] no data directories specified"
@@ -316,6 +317,8 @@ module DiffCommand =
             BackgroundColor = args.TryGetResult Args.BackgroundColor
             Screenshots = globalScreenshots
             ForceDownload = if args.Contains Args.ForceDownload then Some true else None
+            UseEmbree = if args.Contains Args.UseEmbree then Some true else None
+            CameraOutlierPercentile = None  // Not supported in CLI, use project files
             Version = version
         }
         execute config
