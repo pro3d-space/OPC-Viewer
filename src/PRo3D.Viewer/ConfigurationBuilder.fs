@@ -37,6 +37,7 @@ module ConfigurationBuilder =
             Screenshots = None  // CLI args don't have screenshots field yet - will be added later
             ForceDownload = if args.Contains ViewCommand.Args.ForceDownload then Some true else None
             Verbose = if args.Contains ViewCommand.Args.Verbose then Some true else None
+            CameraOutlierPercentile = None  // No CLI arg yet, use default
             Version = version
         }
     
@@ -76,6 +77,7 @@ module ConfigurationBuilder =
             Screenshots = screenshots
             ForceDownload = project.ForceDownload
             Verbose = project.Verbose
+            CameraOutlierPercentile = project.CameraOutlierPercentile
             Version = version
         }
     
@@ -91,6 +93,8 @@ module ConfigurationBuilder =
             BackgroundColor = args.TryGetResult DiffCommand.Args.BackgroundColor
             Screenshots = None  // CLI args don't have screenshots field yet - will be added later
             ForceDownload = if args.Contains DiffCommand.Args.ForceDownload then Some true else None
+            UseEmbree = if args.Contains DiffCommand.Args.UseEmbree then Some true else None
+            CameraOutlierPercentile = None  // No CLI arg yet, use default
             Version = version
         }
     
@@ -116,6 +120,8 @@ module ConfigurationBuilder =
             BackgroundColor = project.BackgroundColor
             Screenshots = screenshots
             ForceDownload = project.ForceDownload
+            UseEmbree = project.UseEmbree
+            CameraOutlierPercentile = project.CameraOutlierPercentile
             Version = version
         }
     
