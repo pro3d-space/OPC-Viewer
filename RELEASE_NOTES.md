@@ -1,3 +1,6 @@
+## 1.1.9
+- fixed sky dist coloring
+
 ## 1.1.8
 - BVH performance improvements
 - update README.md
