@@ -129,8 +129,8 @@ module DiffCommand =
         let sw = Stopwatch.StartNew()
         let backend = if config.UseEmbree |> Option.defaultValue false then Backend.Embree else Backend.Default
         let options = Options(Backend = backend)
-        let triangleTreeMain  = TriangleSet3d(trianglesMain, options = options)
-        let triangleTreeOther = TriangleSet3d(trianglesOther, options = options)
+        let triangleTreeMain  = TriangleSet.Build(trianglesMain, options = options)
+        let triangleTreeOther = TriangleSet.Build(trianglesOther, options = options)
         sw.Stop()
         printfn "building triangle sets ......... %A" sw.Elapsed
 
@@ -148,12 +148,12 @@ module DiffCommand =
         for pGlobal in pointsMain do
 
             do
-                let x = triangleTreeOther.GetNearestPoint(pGlobal)
+                let x = triangleTreeOther.GetClosestPoint(&pGlobal)
                 let d = sqrt x.DistanceSquared
                 rangeNearest.ExtendBy(d)
 
             let ray = Ray3d(pGlobal, sky)
-            let hit = triangleTreeOther.IntersectRay(ray)
+            let hit = triangleTreeOther.IntersectRay(&ray)
             let x = if hit.HasIntersection then Some(abs hit.T, hit.T) else None
             
             i <- i + 1
@@ -238,7 +238,7 @@ module DiffCommand =
 
             match mode with
             | DistanceComputationMode.Nearest ->
-                let x = triangleTreeOther.GetNearestPoint(p)
+                let x = triangleTreeOther.GetClosestPoint(&p)
                 let d = sqrt x.DistanceSquared
                 let w = System.Math.Pow(System.Math.Min(rangeNearest.Max, d) / rangeNearest.Max, 0.25) |> float32
                 C3b(C3f.White * (1.0f - w) + C3f.Red * w)
@@ -251,7 +251,7 @@ module DiffCommand =
                 | _ ->
 
                     let ray = Ray3d(p, sky)
-                    let hit = triangleTreeOther.IntersectRay(ray)
+                    let hit = triangleTreeOther.IntersectRay(&ray)
                     let x = if hit.HasIntersection then Some(abs hit.T, hit.T) else None
                     match x with
                     | Some (dist, t) ->

@@ -384,9 +384,9 @@ module UnifiedViewer =
                         let pp = viewProj.Backward.TransformPosProj(ndc)
                         let ray = Ray3d(view.Location, (pp - view.Location).Normalized)
                         
-                        let hit0Result = diffConfig.env.Tree0.IntersectRay(ray)
+                        let hit0Result = diffConfig.env.Tree0.IntersectRay(&ray)
                         let hit0 = if hit0Result.HasIntersection then Some(abs hit0Result.T, hit0Result.T) else None
-                        let hit1Result = diffConfig.env.Tree1.IntersectRay(ray)
+                        let hit1Result = diffConfig.env.Tree1.IntersectRay(&ray)
                         let hit1 = if hit1Result.HasIntersection then Some(abs hit1Result.T, hit1Result.T) else None
 
                         let (maybeT, isFirst) =
@@ -414,10 +414,10 @@ module UnifiedViewer =
 
                             let otherHitPos =
                                 if isFirst then
-                                    let hit = diffConfig.env.Tree1.IntersectRay(skyRay)
+                                    let hit = diffConfig.env.Tree1.IntersectRay(&skyRay)
                                     if hit.HasIntersection then Some(abs hit.T, hit.T) else None
                                 else
-                                    let hit = diffConfig.env.Tree0.IntersectRay(skyRay)
+                                    let hit = diffConfig.env.Tree0.IntersectRay(&skyRay)
                                     if hit.HasIntersection then Some(abs hit.T, hit.T) else None
 
                             let distFromFirstToSecondLayer =
