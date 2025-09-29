@@ -25,11 +25,11 @@ USAGE: PRo3D.Viewer [--help] [--version] [--dryrun] [--screenshots <path>] [<sub
 
 SUBCOMMANDS:
 
-    diff <options>        Compute difference between a layer with other layers.
-    export <options>      Export data from datasets.
-    list, ls <options>    List datasets.
-    project <options>     Load configuration from JSON project file.
     view <options>        View datasets.
+    diff <options>        Compute difference between two layers.
+    list, ls <options>    List datasets.
+    export <options>      Export data from datasets.
+    project <options>     Load configuration from JSON project file.
 
     Use 'PRo3D.Viewer <subcommand> --help' for additional information.
 
@@ -41,82 +41,84 @@ OPTIONS:
     --help                display this list of options.
 ```
 
-## List
+## Common Options
 
-List all datasets in a directory:
-```
-$ pro3dviewer ls "D:\Pro3D\VictoriaCrater"
-D:\Pro3D\VictoriaCrater\HiRISE_VictoriaCrater\OPC_000_002
-D:\Pro3D\VictoriaCrater\HiRISE_VictoriaCrater\OPC_001_002
-D:\Pro3D\VictoriaCrater\HiRISE_VictoriaCrater_SuperResolution\OPC_000_000
-D:\Pro3D\VictoriaCrater\MER-B_CapeDesire_wbs\OPC_000_000
-```
+Many commands share these options:
 
-Use `-s` to show additional statistics for each dataset:
-```
-$ pro3dviewer ls -s "D:\Pro3D\VictoriaCrater"
-D:\Pro3D\VictoriaCrater\HiRISE_VictoriaCrater\OPC_000_002
-    Positions, DiffuseColorCoordinates
-    63 nodes (42 leafs, 21 inner, levels 0..9)
-    vertices    2 774 058
-    faces       5 505 024
-...
-```
-
-List command also supports remote data sources:
-```
-# List multiple directories including remote sources
-$ pro3dviewer ls ./local_data http://server.com/data.zip
-
-# List with JSON project file (supports all remote features)
-$ pro3dviewer project list_config.json
-```
+| Option | Short | Description |
+| ------ | ----- | ----------- |
+| `--sftp <file>` | `-s` | SFTP server config file (FileZilla format) |
+| `--base-dir <path>` | `-b` | Base directory for relative paths (default: ./data or ./tmp/data) |
+| `--force-download` | `-f` | Force re-download of remote data even if cached |
+| `--verbose` | `-v` | Print detailed info |
+| `--background-color <color>` | `--bg` | Color: hex (#RGB/#RRGGBB), named (black/white/red), or RGB (r,g,b) |
 
 ## View
 
-View OPC datasets and OBJ models.
+```
+pro3dviewer view <DATASET>...
+pro3dviewer view <DATASET>... --obj <FILE>...
+```
 
-```
-pro3dviewer view <DATASET>
-pro3dviewer view <DATASET> --background-color red
-pro3dviewer view <DATASET> --bg #FF0000
-pro3dviewer view <DATASET> --force-download  # Force re-download and re-extract cached remote data
-```
+**Specific options:**
+- `--obj <FILE>` / `-o` - Load OBJ models alongside OPC data
+- `--speed <FLOAT>` - Camera movement speed
+
+**Supports:** `--sftp`, `--base-dir`, `--background-color`, `--force-download`, `--verbose`
 
 ## Diff
 
-Visualize geometric distance between two layers.
-
 ```
 pro3dviewer diff <LAYER1> <LAYER2>
-pro3dviewer diff <LAYER1> <LAYER2> --bg white
-pro3dviewer diff <LAYER1> <LAYER2> --force-download  # Force re-download and re-extract cached remote data
 ```
+
+**Specific options:**
+- `--noValue <FLOAT>` - Value for no difference (default: NaN)
+- `--speed <FLOAT>` - Camera movement speed
+- `--embree` - Use Embree backend for triangle intersection (Windows only)
+
+**Supports:** `--sftp`, `--base-dir`, `--background-color`, `--force-download`, `--verbose`
+
+## List
+
+```
+pro3dviewer ls <DIRECTORY>...
+pro3dviewer ls <DIRECTORY>... --stats
+```
+
+**Specific options:**
+- `--stats` / `-s` - Show attributes, node count, vertex/face count
+
+**Supports:** `--sftp`, `--base-dir`, `--force-download`, `--verbose`
+
+## Export
+
+```
+pro3dviewer export <DATASET>... --format <pts|ply> --out <FILE>
+```
+
+**Required options:**
+- `--format <pts|ply>` - Export format
+- `--out <FILE>` - Output filename
+
+**Supports:** `--sftp`, `--base-dir`, `--force-download`, `--verbose`
 
 ## Keyboard Shortcuts
 
 | Key | Description | View | Diff |
 | --- | ----------- | :--: | :--: |
-| `W`, `A`, `S`, `D` | move forward, left, right, back | ✓ | ✓ |
-| `F` | toggle wireframe/fill mode | ✓ | ✓ |
-| `L` | toggle Level-of-Detail visualization | ✓ | ✓ |
-| `F12` | save screenshot to configured directory (default: ./screenshots) | ✓ | ✓ |
-| `PageUp` | increase movement speed | ✓ | ✓ |
-| `PageDown` | decrease movement speed | ✓ | ✓ |
-| `T` | toggle between layers | | ✓ |
-| `C` | toggle distance visualization | | ✓ |
-
-## Export
-Create `.pts` or `.ply` files from datasets.
-
-```
-$ pro3dviewer export D:\Pro3D\VictoriaCrater\HiRISE_VictoriaCrater\OPC_001_002 --format pts --out test.pts
-wrote 3329842 points to test.pts
-```
+| `W`, `A`, `S`, `D` | Move forward, left, backward, right | ✓ | ✓ |
+| `PageUp` / `PageDown` | Increase/decrease movement speed | ✓ | ✓ |
+| `F` | Toggle wireframe/fill mode | ✓ | ✓ |
+| `L` | Toggle Level-of-Detail visualization | ✓ |   |
+| `F12` | Save screenshot | ✓ | ✓ |
+| `T` | Toggle between layers |   | ✓ |
+| `C` | Toggle distance visualization |   | ✓ |
+| `M` | Toggle distance computation mode (Sky/Nearest) |   | ✓ |
 
 ## Dry Run Mode
 
-The `--dryrun` flag parses command-line arguments and outputs them as JSON without executing the command. This is useful for testing argument parsing and creating project files.
+The `--dryrun` flag parses command-line arguments and outputs them as JSON without executing the command. Useful for testing argument parsing and creating project files.
 
 ```bash
 $ pro3dviewer --dryrun view data1 data2 --speed 5.0
@@ -128,14 +130,6 @@ $ pro3dviewer --dryrun view data1 data2 --speed 5.0
   ],
   "speed": 5
 }
-
-$ pro3dviewer --dryrun export mydata --format Pts --out output.pts
-{
-  "command": "export",
-  "dataDir": "mydata",
-  "format": "pts",
-  "out": "output.pts"
-}
 ```
 
 ## Project Files
@@ -144,40 +138,82 @@ Instead of command-line arguments, use JSON project files:
 
 ```bash
 pro3dviewer project config.json
-pro3dviewer project config.json --force-download  # Force re-download and re-extract cached remote data
+pro3dviewer project config.json --force-download
 # or shortcut:
 pro3dviewer config.json
-pro3dviewer config.json -f  # Force re-download and re-extract cached remote data
+pro3dviewer config.json -f
 ```
 
-### Unified Data Array Format
+### Project File Reference
 
-All commands (view, diff, export) use a unified `data` array format:
+#### Common Fields
 
+| Field | Type | Description | Commands |
+| ----- | ---- | ----------- | -------- |
+| `command` | string | Command to execute | All |
+| `data` | array | Data sources (see Data Format below) | All |
+| `sftp` | string | Path to FileZilla SFTP config | All except diff |
+| `baseDir` | string | Base directory for relative paths | All except view |
+| `forceDownload` | bool | Force re-download cached data | All except list |
+| `verbose` | bool | Enable verbose output | view, diff, export |
+| `screenshots` | string | Screenshot directory path | view, diff |
+| `backgroundColor` | string | Background color | view, diff |
+
+#### Command-Specific Fields
+
+**View:**
+- `speed` (float) - Camera movement speed
+- `cameraOutlierPercentile` (float) - Outlier trimming for camera positioning (default: 2.5)
+
+**Diff:**
+- `noValue` (float) - Value for no difference (default: NaN)
+- `speed` (float) - Camera movement speed
+- `useEmbree` (bool) - Use Embree backend (Windows only)
+- `cameraOutlierPercentile` (float) - Outlier trimming for camera positioning
+
+**List:**
+- `stats` (bool) - Show detailed statistics
+
+**Export:**
+- `format` (string) - "pts" or "ply" (required)
+- `out` (string) - Output filename (required)
+
+### Data Format
+
+The `data` field accepts different formats per command:
+
+#### View/Export - Full data entries with transforms:
 ```json
 {
   "data": [
-    { "path": "local/directory", "type": "opc" },
-    { "path": "model.obj", "type": "obj" },
-    { "path": "http://server.com/data.zip" },
-    { "path": "sftp://user@server/data.zip" }
+    {
+      "path": "dataset1",
+      "type": "opc",
+      "transform": "[[1, 0, 0, 10], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]"
+    },
+    {
+      "path": "model.obj",
+      "type": "obj"
+    }
   ]
 }
 ```
 
 **Data Entry Properties:**
-- `path` (required): File path, directory, or URL
-- `type` (optional): "opc" or "obj" (auto-inferred from file extension)
-- `transform` (optional): 4x4 transformation matrix as string
+- `path` (required) - File path, directory, or URL
+- `type` (optional) - "opc" or "obj" (auto-inferred from extension)
+- `transform` (optional) - 4x4 transformation matrix as string
 
-**Path Types Supported:**
-- Local directories: `./data`, `C:\Data`  
-- Local files: `model.obj`, `data.zip`
-- HTTP/HTTPS URLs: `https://server.com/data.zip`
-- SFTP URLs: `sftp://user@server.com/path/data.zip`
+#### Diff/List - Simple string array:
+```json
+{
+  "data": ["path1", "path2"]
+}
+```
 
-### View Project
+### Example Projects
 
+#### View Project
 ```json
 {
   "command": "view",
@@ -188,49 +224,35 @@ All commands (view, diff, export) use a unified `data` array format:
   ],
   "speed": 2.0,
   "backgroundColor": "#000080",
-  "screenshots": "./project-screenshots"
+  "screenshots": "./project-screenshots",
+  "verbose": true
 }
 ```
 
-With transformations:
-```json
-{
-  "command": "view",
-  "data": [
-    {
-      "path": "dataset1",
-      "type": "opc",
-      "transform": "[[1, 0, 0, 10], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]"
-    },
-    {
-      "path": "model.obj",
-      "transform": "[[2, 0, 0, 0], [0, 2, 0, 0], [0, 0, 2, 0], [0, 0, 0, 1]]"
-    }
-  ]
-}
-```
-
-### Diff Project
+#### Diff Project
 ```json
 {
   "command": "diff",
   "data": ["layer1", "layer2"],
   "verbose": true,
   "noValue": "NaN",
-  "backgroundColor": "gray"
+  "backgroundColor": "white",
+  "useEmbree": true,
 }
 ```
 
-### List Project
+#### List Project
 ```json
 {
   "command": "list",
-  "data": ["dir1", "dir2", "dir3"],
-  "stats": true
+  "data": ["dir1", "dir2", "http://server.com/data.zip"],
+  "stats": true,
+  "verbose": true,
+  "forceDownload": false
 }
 ```
 
-### Export Project
+#### Export Project
 ```json
 {
   "command": "export",
@@ -246,21 +268,22 @@ With transformations:
 }
 ```
 
-Paths in project files can be:
-- Relative (resolved from project file location or baseDir)
-- Absolute (`C:\Data` or `/home/data`)
-- URLs (`https://example.com/data.zip`, `sftp://server/path`)
-
 ## Specifying Datasets
 
-The `pro3dviewer` tool can load datasets from local directories, but also remotely from `HTTP`, `HTTPS` and `SFTP` locations.
+The `pro3dviewer` tool can load datasets from local directories, but also remotely from HTTP, HTTPS and SFTP locations.
 
-If specifying a remote location (see *Quickstart* for an example), then it is expected that the given URL references a **.zip file**.
-The .zip file will be downloaded and extracted to a local cache folder. Files are downloaded only once. If the same remote URL is used again, then the locally cached content will be used without downloading the file again.
+**Supported paths:**
+- Local directories: `./data`, `C:\Data`
+- Local files: `model.obj`, `data.zip`
+- HTTP/HTTPS URLs: `https://example.com/data.zip`
+- SFTP URLs: `sftp://user@server.com/path/data.zip`
 
-### SFTP
-If the server requires authentication, then you can specify a config file in FileZilla format using `--sftp`, e.g.
+Remote .zip files are downloaded and extracted to a local cache. Files are cached and reused unless `--force-download` is specified.
+
+### SFTP Authentication
+
+For servers requiring authentication, specify a FileZilla config file:
 
 ```
-pro3dviewer view "sftp://alice@sftp-server.example.org:2200/ex/ample/some_opc.zip" --sftp "path/to/filezilla-config.xml" 
+pro3dviewer view "sftp://alice@sftp-server.example.org:2200/ex/ample/some_opc.zip" --sftp "path/to/filezilla-config.xml"
 ```
