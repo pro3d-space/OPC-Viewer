@@ -113,7 +113,7 @@ module DiffCommand =
 
         let sky = Utils.getSky hierarchyMain
         let ground = Plane3d(sky, V3d.Zero)
-        let w2p = ground.GetWorldToPlane()
+        //let w2p = ground.GetWorldToPlane()
 
         let trianglesMainWithNaN = Utils.getTriangles false hierarchyMain
         let trianglesMain = trianglesMainWithNaN |> List.filter Utils.isValidTriangle |> Array.ofList
@@ -136,41 +136,49 @@ module DiffCommand =
 
         let pointsMain = Utils.getPoints true hierarchyMain
         let gbb = Box3d(pointsMain)
-        let mutable i = 0
+        //let mutable i = 0
         let mutable countHits = 0
-        
         sw.Restart()
-        let rangeDist = Range1d.Invalid
-        let rangeT = Range1d.Invalid
-        let mutable qs = List.empty<(V3d*V3d*float)>
 
-        let rangeNearest = Range1d.Invalid
+        //let mutable qs = List.empty<(V3d*V3d*float)>
+
+        let signedSkyDist (pGlobal : V3d) : float option =
+            let ray = Ray3d(pGlobal - 1024.0 * sky, sky)
+            let hit = triangleTreeOther.IntersectRay(&ray)
+            if hit.HasIntersection then
+                hit.T - 1024.0 |> Some
+            else
+                None
+
+        // pre-process global ranges and absolute distances
+        let rangeDist    = Range1d.Invalid  // sky dist    : absolute distance range
+        let rangeT       = Range1d.Invalid  // sky dist    : signed t range
+        let rangeNearest = Range1d.Invalid  // nearest dist: absolute distance range
+
         for pGlobal in pointsMain do
 
+            // compute closest point distance
             do
                 let x = triangleTreeOther.GetClosestPoint(&pGlobal)
                 let d = sqrt x.DistanceSquared
                 rangeNearest.ExtendBy(d)
 
-            let ray = Ray3d(pGlobal, sky)
-            let hit = triangleTreeOther.IntersectRay(&ray)
-            let x = if hit.HasIntersection then Some(abs hit.T, hit.T) else None
-            
-            i <- i + 1
+            // compute sky intersection distance
+            do
+                match signedSkyDist pGlobal with
+                | Some t ->
+                    countHits <- countHits + 1
+                    //let g = ray.Intersect(ground)
+                    //let p = g + sky * t
+                    //let p' = w2p.TransformPos p
+                    rangeDist.ExtendBy(abs t)
+                    rangeT.ExtendBy(t)
+                | None ->
+                    ()
 
-            match x with
-            | Some (dist, t) ->
-                countHits <- countHits + 1
-                let g = ray.Intersect(ground)
-                let p = g + sky * t
-                let p' = w2p.TransformPos p
-                
-                qs <- (pGlobal, p', t) :: qs
-                rangeDist.ExtendBy(dist)
-                rangeT.ExtendBy(t)
-                ()
-            | None ->
-                ()
+            ()
+
+
         sw.Stop()
         printfn "computing distances ... %A" sw.Elapsed
 
@@ -179,7 +187,7 @@ module DiffCommand =
         printfn "range T       : %A" rangeT
         printfn "range nearest : %A" rangeNearest
 
-        let p2c = Dictionary<V3d,C3b>()
+        //let p2c = Dictionary<V3d,C3b>()
 
         //if false then // debug
         //    let outfile = @"E:\qs.pts"
@@ -237,36 +245,27 @@ module DiffCommand =
         let getColor (mode : DistanceComputationMode) (p : V3d) : C3b =
 
             match mode with
+
             | DistanceComputationMode.Nearest ->
+                //let x = triangleTreeMain.GetClosestPoint(&p)
                 let x = triangleTreeOther.GetClosestPoint(&p)
                 let d = sqrt x.DistanceSquared
                 let w = System.Math.Pow(System.Math.Min(rangeNearest.Max, d) / rangeNearest.Max, 0.25) |> float32
                 C3b(C3f.White * (1.0f - w) + C3f.Red * w)
 
             | DistanceComputationMode.Sky -> 
-                match (false, C3b.White) (*p2c.TryGetValue(p)*) with
-                | (true, c) when false -> 
-                    //printfn "haha %A" c
+                match signedSkyDist p with
+                | Some t ->
+                    let w = float32(t / max)
+                    let c =
+                        if w < 0.0f then
+                            let w = -w
+                            C3b(C3f.Blue * w + C3f.White * (1.0f - w))
+                        else
+                            C3b(C3f.Red * w + C3f.White * (1.0f - w))
                     c
-                | _ ->
-
-                    let ray = Ray3d(p, sky)
-                    let hit = triangleTreeOther.IntersectRay(&ray)
-                    let x = if hit.HasIntersection then Some(abs hit.T, hit.T) else None
-                    match x with
-                    | Some (dist, t) ->
-                        //printfn "%A" t
-                        let w = float32(t / max)
-                        //let w = System.Math.Pow(float w0, 0.5) |> float32
-                        let c =
-                            if w < 0.0f then
-                                let w = -w
-                                C3b(C3f.Blue * w + C3f.White * (1.0f - w))
-                            else
-                                C3b(C3f.Red * w + C3f.White * (1.0f - w))
-                        c
-                    | None ->
-                        C3b.GreenYellow
+                | None ->
+                    C3b.GreenYellow
 
         let env = {
             Label0 = Path.GetFileName layerMain.Path.FullName
@@ -277,7 +276,7 @@ module DiffCommand =
             Sky = sky
             }
 
-        // Parse background color if provided
+        // parse background color if provided
         let backgroundColor = parseBackgroundColor config.BackgroundColor
 
         // ... and show it using the unified viewer

@@ -12,15 +12,12 @@ open Aardvark.Rendering.Text
 open FSharp.Data.Adaptive
 open MBrace.FsPickler
 open PRo3D.Viewer
-open PRo3D.Viewer.View
 open PRo3D.Viewer.Diff
 open PRo3D.Viewer.Shared
 open PRo3D.Viewer.Shared.RenderingConstants
-open PRo3D.Viewer.Shared.ViewerCommon
 open System
 open FShade
 open Aardvark.FontProvider
-open Uncodium.Geometry.TriangleSet
 
 // Font type for text overlays
 type DiffFont = GoogleFontProvider<"Roboto Mono">
@@ -45,11 +42,6 @@ and DiffModeConfig = {
     /// Initial toggle mode
     initialToggleMode : DiffToggleMode
 }
-
-/// Toggle mode for diff viewer
-and DiffToggleMode =
-    | First
-    | Second
 
 /// Configuration for the unified viewer
 type ViewerConfig = {
@@ -327,14 +319,14 @@ module UnifiedViewer =
 
             | DiffMode diffConfig ->
                 // Diff mode implementation
-                let mode = cval Diff.DiffTypes.DistanceComputationMode.Sky
+                let distMode = cval DistanceComputationMode.Sky
                 let toggleMode = cval diffConfig.initialToggleMode
                 let showDistancesEnabled = cval true
 
                 let hierarchies = 
                     config.scene.patchHierarchies |> Seq.toList |> List.map (fun basePath -> 
                         let h = PatchHierarchy.load serializer.Pickle serializer.UnPickle (OpcPaths.OpcPaths basePath)
-                        Diff.DiffRendering.createSceneGraphCustom win.FramebufferSignature runner basePath h mode diffConfig.env.GetColor
+                        Diff.DiffRendering.createSceneGraphCustom win.FramebufferSignature runner h distMode toggleMode diffConfig.env.GetColor
                     )
 
                 let pickPos = AVal.init V3d.NaN
@@ -356,10 +348,10 @@ module UnifiedViewer =
 
                 win.Keyboard.KeyDown(Keys.M).Values.Add(fun _ -> 
                     transact (fun _ -> 
-                        mode.Value <-
-                            match mode.Value with
-                            | Diff.DiffTypes.DistanceComputationMode.Sky -> Diff.DiffTypes.DistanceComputationMode.Nearest
-                            | Diff.DiffTypes.DistanceComputationMode.Nearest -> Diff.DiffTypes.DistanceComputationMode.Sky
+                        distMode.Value <-
+                            match distMode.Value with
+                            | DistanceComputationMode.Sky -> DistanceComputationMode.Nearest
+                            | DistanceComputationMode.Nearest -> DistanceComputationMode.Sky
                     )
                 )
 

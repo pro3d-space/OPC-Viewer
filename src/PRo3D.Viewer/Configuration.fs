@@ -1,7 +1,5 @@
 namespace PRo3D.Viewer
 
-open Aardvark.Base
-
 /// Type-safe configuration structures for OPC Viewer commands
 module Configuration =
     

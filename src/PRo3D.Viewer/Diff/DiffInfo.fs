@@ -1,15 +1,11 @@
 ﻿namespace PRo3D.Viewer.Diff
 
-open PRo3D.Viewer
 open Aardvark.Base
+open PRo3D.Viewer.Shared
 open Uncodium.Geometry.TriangleSet
 
 [<AutoOpen>]
 module DiffTypes =
-
-    type DistanceComputationMode = 
-        | Sky
-        | Nearest
 
     type ComputeDistanceColor = DistanceComputationMode -> V3d -> C3b
     

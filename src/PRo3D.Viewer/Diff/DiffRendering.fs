@@ -6,8 +6,8 @@ open Aardvark.GeoSpatial.Opc
 open Aardvark.GeoSpatial.Opc.Load
 open Aardvark.GeoSpatial.Opc.PatchLod
 open Aardvark.Rendering
-open FSharp.Data.Adaptive 
-
+open FSharp.Data.Adaptive
+open PRo3D.Viewer.Shared 
 
 module LodDecider =
 
@@ -54,7 +54,13 @@ module DiffRendering =
         let Distances = "Distances"
         let DistancesSym = Sym.ofString Distances
 
-    let createSceneGraphCustom  (signature : IFramebufferSignature) (uploadThreadpool : Load.Runner) (basePath : string) (h : PatchHierarchy) (mode : aval<DistanceComputationMode>) (getColor : ComputeDistanceColor) =
+    let createSceneGraphCustom
+        (signature : IFramebufferSignature)
+        (uploadThreadpool : Load.Runner)
+        (h : PatchHierarchy)
+        (distanceMode : aval<DistanceComputationMode>)
+        (toggleMode : aval<DiffToggleMode>)
+        (getColor : ComputeDistanceColor) =
            
         // use this anonymous scope extraction for patchNodes for potentially expensive computations, needed later in the getter functions
         let context (n : PatchNode) (s : Ag.Scope) =
@@ -76,11 +82,10 @@ module DiffRendering =
                 
         let distanceComputationEnabled : aval<bool> = cval true
 
-        let rnd = new RandomSystem()
         let computeDistancesForPatch (paths : OpcPaths) (patch : RenderPatch) =
             let buffer : aval<IBuffer> = 
-                (distanceComputationEnabled, mode) 
-                ||> AVal.map2 (fun enabled mode -> 
+                (distanceComputationEnabled, distanceMode) 
+                ||> AVal.map2 (fun enabled distanceMode -> 
                     if enabled then
                         let (g, elapsedIndex), createTime = 
                             timed (fun () -> 
@@ -95,7 +100,7 @@ module DiffRendering =
                                     match pLocal.IsNaN with
                                     | true -> C3b.Yellow
                                     | false -> let p = V3d(pLocal) |> patch.info.Local2Global.TransformPos
-                                               getColor mode p
+                                               getColor distanceMode p
                                 
                                 V3f(C3f.FromC3b(c))
                                 //rnd.UniformV3f()
