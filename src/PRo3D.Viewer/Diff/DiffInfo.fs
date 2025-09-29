@@ -16,8 +16,8 @@ module DiffTypes =
     type DiffEnv = {
         Label0 : string
         Label1 : string
-        Tree0: TriangleSet3d
-        Tree1: TriangleSet3d
+        Tree0: ITriangleSet
+        Tree1: ITriangleSet
         GetColor : ComputeDistanceColor
         Sky : V3d
     }
