@@ -49,6 +49,8 @@ type ViewerConfig = {
     mode : ViewerMode
     /// OPC scene to render
     scene : OpcScene
+    /// Sky direction
+    sky : V3d
     /// Initial camera view
     initialCameraView : CameraView
     /// Custom keyboard handlers (key -> handler)
@@ -234,7 +236,7 @@ module UnifiedViewer =
                 let cursorPos = AVal.init V3d.Zero
                 let cursor = 
                     if viewConfig.enablePicking then
-                        Box3d.FromCenterAndSize(V3d.Zero, V3d.III * DEFAULT_CURSOR_SIZE)
+                        Box3d.FromCenterAndSize(V3d.Zero, V3d(1.0, 1.0, 1.0) * DEFAULT_CURSOR_SIZE)
                         |> Sg.box' C4b.White 
                         |> Sg.trafo (cursorPos |> AVal.map Trafo3d.Translation)
                         |> Sg.shader {
@@ -333,9 +335,15 @@ module UnifiedViewer =
                 let cursorPos = AVal.init V3d.NaN
                 let layerDistAtCursor = AVal.init nan
 
+                let cursorCone = Sg.cone' 16 C4b.Red (0.3 * DIFF_CURSOR_SIZE) (5.0 * DIFF_CURSOR_SIZE)
+                let rot = Trafo3d.Translation(0.0, 0.0, -5.0 * DIFF_CURSOR_SIZE) * Trafo3d.RotateInto(-V3d.ZAxis, config.sky)
+                    
+                let cursorBox = Box3d(V3d(-0.1, -0.1, 0.0) * DIFF_CURSOR_SIZE, V3d(0.1, 0.1, 10.0) * DIFF_CURSOR_SIZE)
                 let cursor = 
-                    Box3d.FromCenterAndSize(V3d.Zero, V3d.III * DIFF_CURSOR_SIZE)
-                    |> Sg.box' C4b.Red 
+                    //Box3d.FromCenterAndSize(V3d.Zero, V3d(1.0, 1.0, 10.0) * DIFF_CURSOR_SIZE)
+                    //cursorBox |> Sg.box' C4b.Red
+                    cursorCone
+                    |> Sg.trafo' rot
                     |> Sg.trafo (pickPos |> AVal.map Trafo3d.Translation)
                     |> Sg.shader {
                         do! DefaultSurfaces.stableTrafo

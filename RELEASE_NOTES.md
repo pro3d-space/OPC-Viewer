@@ -1,3 +1,7 @@
+## 1.1.10
+- improved dist visualization
+- diff cursor now shows sky direction
+
 ## 1.1.9
 - fixed sky dist coloring
 

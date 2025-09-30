@@ -168,6 +168,7 @@ module Utils =
         let rootPatch = match patchHierarchy.tree with | QTree.Node (n, _) -> n | QTree.Leaf n -> n
         let gbb = rootPatch.info.GlobalBoundingBox
         let sky = gbb.Center.Normalized
+        //V3d(sky.X, sky.Z, -sky.Y)
         sky
 
     /// Gets global bounding box of given patch hierarchy.
@@ -296,6 +297,7 @@ module Utils =
 
     let createInitialCameraView (gbb : Box3d) : CameraViewAndNearFar =
         let globalSky = gbb.Center.Normalized
+        //let globalSky = V3d(globalSky.X, globalSky.Z, -globalSky.Y)
         let plane = Plane3d(globalSky, 0.0)
         let plane2global pos = gbb.Center + plane.GetPlaneSpaceTransform().TransformPos(pos)
 

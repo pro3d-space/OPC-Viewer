@@ -135,92 +135,80 @@ module DiffCommand =
         printfn "building triangle sets ......... %A" sw.Elapsed
 
         let pointsMain = Utils.getPoints true hierarchyMain
+        let pointsOther = Utils.getPoints true hierarchyOther
         let gbb = Box3d(pointsMain)
-        //let mutable i = 0
-        let mutable countHits = 0
         sw.Restart()
 
-        //let mutable qs = List.empty<(V3d*V3d*float)>
-
-        let signedSkyDist (pGlobal : V3d) : float option =
-            let ray = Ray3d(pGlobal - 1024.0 * sky, sky)
-            let hit = triangleTreeOther.IntersectRay(&ray)
-            if hit.HasIntersection then
-                hit.T - 1024.0 |> Some
+        let signedSkyDist (intersectWith : ITriangleSet) (pGlobal : V3d) : float option =
+            let up = Ray3d(pGlobal, sky)
+            let hitUp = intersectWith.IntersectRay(&up)
+            if hitUp.HasIntersection then
+                Some hitUp.T
             else
-                None
+                let down = Ray3d(pGlobal, -sky)
+                let hitDown = intersectWith.IntersectRay(&down)
+                if hitDown.HasIntersection then
+                    Some -hitDown.T
+                else
+                    None
 
         // pre-process global ranges and absolute distances
-        let rangeDist    = Range1d.Invalid  // sky dist    : absolute distance range
-        let rangeT       = Range1d.Invalid  // sky dist    : signed t range
-        let rangeNearest = Range1d.Invalid  // nearest dist: absolute distance range
+        let rangeT0       = Range1d.Invalid  // sky dist    : signed t range
+        let rangeT1       = Range1d.Invalid  // sky dist    : signed t range
+        let rangeNearest0 = Range1d.Invalid  // nearest dist: absolute distance range
+        let rangeNearest1 = Range1d.Invalid  // nearest dist: absolute distance range
 
+        // distance ranges: main -> other
         for pGlobal in pointsMain do
 
             // compute closest point distance
             do
                 let x = triangleTreeOther.GetClosestPoint(&pGlobal)
                 let d = sqrt x.DistanceSquared
-                rangeNearest.ExtendBy(d)
+                rangeNearest0.ExtendBy(d)
 
             // compute sky intersection distance
             do
-                match signedSkyDist pGlobal with
+                match signedSkyDist triangleTreeOther pGlobal with
                 | Some t ->
-                    countHits <- countHits + 1
+                    //countHits <- countHits + 1
                     //let g = ray.Intersect(ground)
                     //let p = g + sky * t
                     //let p' = w2p.TransformPos p
-                    rangeDist.ExtendBy(abs t)
-                    rangeT.ExtendBy(t)
+                    //rangeDist.ExtendBy(abs t)
+                    rangeT0.ExtendBy(t)
                 | None ->
                     ()
 
             ()
 
+        // distance ranges: other -> main
+        for pGlobal in pointsOther do
+
+            // compute closest point distance
+            do
+                let x = triangleTreeMain.GetClosestPoint(&pGlobal)
+                rangeNearest1.ExtendBy(sqrt x.DistanceSquared)
+
+            // compute sky intersection distance
+            do
+                match signedSkyDist triangleTreeMain pGlobal with
+                | Some t -> rangeT1.ExtendBy(t)
+                | None -> ()
+
+            ()
 
         sw.Stop()
         printfn "computing distances ... %A" sw.Elapsed
 
-        printfn "%d hits / %d points" countHits pointsMain.Length
-        printfn "range dist    : %A" rangeDist
-        printfn "range T       : %A" rangeT
-        printfn "range nearest : %A" rangeNearest
-
-        //let p2c = Dictionary<V3d,C3b>()
-
-        //if false then // debug
-        //    let outfile = @"E:\qs.pts"
-
-        //    let max = max (abs rangeT.Min) (abs rangeT.Max)
-
-        //    use f = new StreamWriter(outfile)
-        //    for (pGlobal,p,t) in qs do
-        //        let w = float32(t / max)
-        //        let c =
-        //            if w < 0.0f then
-        //                let w = -w
-        //                C3b(C3f.Blue * w + C3f.White * (1.0f - w))
-        //            else
-        //                C3b(C3f.Red * w + C3f.White * (1.0f - w))
-
-        //        p2c[pGlobal] <- c
-
-        //        sprintf "%f %f %f %i %i %i" p.X p.Y p.Z c.R c.G c.B |> f.WriteLine
-
-        //    printfn "exported diff point cloud to %s" outfile
-
-        //    use fHisto = new StreamWriter(outfile + ".csv")
-        //    let histo = qs |> Seq.groupBy (fun (_,_,t) -> int(t*1000.0)) |> Seq.map (fun (key, xs) -> (key, xs |> Seq.length)) |> Seq.sortBy (fun (k,_) -> k) |> Seq.toList
-        //    for (k,count) in histo do
-        //        let line = sprintf "%i,%i" k count
-        //        //printfn "%s" line
-        //        fHisto.WriteLine line
-
-        //    ()
-
         
- 
+        let max0 = max (abs rangeT0.Min) (abs rangeT0.Max)
+        let max1 = max (abs rangeT1.Min) (abs rangeT1.Max)
+
+        printfn "range T0       : %A (abs max is %f)" rangeT0 max0
+        printfn "range T1       : %A (abs max is %f)" rangeT1 max1
+        printfn "range nearest0 : %A" rangeNearest0
+        printfn "range nearest1 : %A" rangeNearest1
 
         // create OpcScene ...
         // Use robust camera calculation to handle degenerate triangles/outliers
@@ -241,22 +229,40 @@ module DiffCommand =
 
         // ... and show it
         
-        let max = max (abs rangeT.Min) (abs rangeT.Max)
-        let getColor (mode : DistanceComputationMode) (p : V3d) : C3b =
+        let getColor (distMode : DistanceComputationMode) (toggleMode : DiffToggleMode) (p : V3d) : C3b =
 
-            match mode with
+            match distMode, toggleMode with
 
-            | DistanceComputationMode.Nearest ->
-                //let x = triangleTreeMain.GetClosestPoint(&p)
+            | DistanceComputationMode.Nearest, DiffToggleMode.First ->
                 let x = triangleTreeOther.GetClosestPoint(&p)
                 let d = sqrt x.DistanceSquared
-                let w = System.Math.Pow(System.Math.Min(rangeNearest.Max, d) / rangeNearest.Max, 0.25) |> float32
-                C3b(C3f.White * (1.0f - w) + C3f.Red * w)
+                let w = System.Math.Pow(d / rangeNearest0.Max, 0.25) |> float32
+                C3b(C3f.Green * (1.0f - w) + C3f.Red * w)
+                
+            | DistanceComputationMode.Nearest, DiffToggleMode.Second ->
+                let x = triangleTreeMain.GetClosestPoint(&p)
+                let d = sqrt x.DistanceSquared
+                let w = System.Math.Pow(d / rangeNearest1.Max, 0.25) |> float32
+                C3b(C3f.Green * (1.0f - w) + C3f.Red * w)
 
-            | DistanceComputationMode.Sky -> 
-                match signedSkyDist p with
+            | DistanceComputationMode.Sky, DiffToggleMode.First ->
+                match signedSkyDist triangleTreeOther p with
                 | Some t ->
-                    let w = float32(t / max)
+                    let w = float32(t / max0)
+                    let c =
+                        if w < 0.0f then
+                            let w = -w
+                            C3b(C3f.Blue * w + C3f.White * (1.0f - w))
+                        else
+                            C3b(C3f.Red * w + C3f.White * (1.0f - w))
+                    c
+                | None ->
+                    C3b.GreenYellow
+
+            | DistanceComputationMode.Sky, DiffToggleMode.Second ->
+                match signedSkyDist triangleTreeMain p with
+                | Some t ->
+                    let w = float32(t / max1)
                     let c =
                         if w < 0.0f then
                             let w = -w
@@ -286,6 +292,7 @@ module DiffCommand =
                 initialToggleMode = Shared.DiffToggleMode.First
             }
             scene = scene
+            sky = sky
             initialCameraView = initialCam.CameraView
             customKeyHandlers = Map.empty
             customMouseHandler = None

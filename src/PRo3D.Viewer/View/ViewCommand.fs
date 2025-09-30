@@ -257,6 +257,7 @@ module ViewCommand =
                 enablePicking = true
             }
             scene = opcScene
+            sky = match List.first patchHierarchies with | Some x -> Utils.getSky x | None -> V3d.ZAxis
             initialCameraView = initialCam.CameraView
             customKeyHandlers = Map.empty
             customMouseHandler = None

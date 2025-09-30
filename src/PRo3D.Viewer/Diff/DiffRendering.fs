@@ -23,7 +23,7 @@ module LodDecider =
            let closest = bb.GetClosestPointOn(campPos)
            let dist    = (closest - campPos).Length
 
-           //// super agressive to prune out far away stuff, too aggresive !!!
+           //// super agressive to prune out far away stuff, too aggressive !!!
            //if not isActive || (campPos - bb.Center).Length > p.info.GlobalBoundingBox.Size.[p.info.GlobalBoundingBox.Size.MajorDim] * 1.5 
            //    then false
            //else
@@ -83,32 +83,36 @@ module DiffRendering =
         let distanceComputationEnabled : aval<bool> = cval true
 
         let computeDistancesForPatch (paths : OpcPaths) (patch : RenderPatch) =
-            let buffer : aval<IBuffer> = 
-                (distanceComputationEnabled, distanceMode) 
-                ||> AVal.map2 (fun enabled distanceMode -> 
+            let buffer : aval<IBuffer> =
+                adaptive {
+                    let! enabled = distanceComputationEnabled
+                    let! distanceMode = distanceMode
+                    let! toggleMode = toggleMode
+
                     if enabled then
-                        let (g, elapsedIndex), createTime = 
-                            timed (fun () -> 
+                        let (g, elapsedIndex), createTime =
+                            timed (fun () ->
                                 Patch.load paths patch.modality patch.info
                             )
                         //let idx = g.IndexArray |> unbox<int[]>
                         let positions = g.IndexedAttributes[DefaultSemantic.Positions] |> unbox<V3f[]>
-                        let distances = 
-                            positions |> Array.map (fun pLocal -> 
+                        let distances =
+                            positions |> Array.map (fun pLocal ->
                                 //let pLocal = positions[idx]
                                 let c =
-                                    match pLocal.IsNaN with
-                                    | true -> C3b.Yellow
-                                    | false -> let p = V3d(pLocal) |> patch.info.Local2Global.TransformPos
-                                               getColor distanceMode p
-                                
+                                    match pLocal.AnyNaN with
+                                    | true ->
+                                        C3b.Yellow
+                                    | false ->
+                                        let p = V3d(pLocal) |> patch.info.Local2Global.TransformPos
+                                        getColor distanceMode toggleMode p
+
                                 V3f(C3f.FromC3b(c))
-                                //rnd.UniformV3f()
                             )
-                        ArrayBuffer(distances)
+                        return ArrayBuffer(distances) :> IBuffer
                     else
-                        failwith "dont know"
-                )
+                        return failwith "don't know" :> IBuffer
+                }
             BufferView(buffer, typeof<V3f>)
 
         let getVertexAttributes (paths : OpcPaths) (scope : obj) (patch : RenderPatch) : Map<Symbol, BufferView> =
