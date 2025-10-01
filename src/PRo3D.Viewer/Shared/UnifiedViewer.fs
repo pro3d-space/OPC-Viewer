@@ -95,6 +95,25 @@ module UnifiedViewer =
                 }
             }
 
+        let diffuseLighting (v : Vertex) =
+            fragment {
+                // Light from top-right-behind (towards camera) in view space
+                let lightDir = Vec.normalize (V3d(1.0, 2.0, 3.0))
+
+                // Normal must be in view space
+                let n = Vec.normalize v.n
+
+                // Lambertian diffuse
+                let diffuse = abs (Vec.dot n lightDir)
+
+                // Ambient + diffuse
+                let ambient = 0.5
+                let lighting = ambient + (1.0 - ambient) * diffuse
+
+                // Modulate color by lighting
+                return V4d(v.c.XYZ * lighting, v.c.W)
+            }
+
         type PickBuffer = {
             [<Semantic("PickIds")>] id : int
         }
@@ -192,18 +211,104 @@ module UnifiedViewer =
 
         // Common viewer state
         let speed = AVal.init config.scene.speed
-        let view = ViewerCommon.createCameraController config.initialCameraView speed win
-        let frustum = ViewerCommon.createFrustum win.Sizes config.scene.near config.scene.far DEFAULT_FOV
         let lodVisEnabled = cval true
         let fillMode = cval FillMode.Fill
 
+        // Calculate scene size for orbit distance calculation
+        let sceneSize =
+            let allBoundingBoxes =
+                config.scene.patchHierarchies
+                |> Seq.map (fun basePath ->
+                    let h = PatchHierarchy.load serializer.Pickle serializer.UnPickle (OpcPaths.OpcPaths basePath)
+                    Utils.getGlobalBoundingBox(h)
+                )
+                |> Seq.toList
+
+            match allBoundingBoxes with
+            | [] -> 100.0
+            | boxes ->
+                let allPoints = boxes |> List.collect (fun b -> [b.Min; b.Max])
+                let combinedBox = Box3d(allPoints)
+                combinedBox.Size.Length * 0.25  // 25% of scene diagonal as default orbit distance
+
+        // Camera mode state and controllers (both mutable, recreated on mode switch)
+        let cameraMode = cval FlyThrough
+        let mutable savedOrbitDistance : float option = None  // Save orbit distance (not absolute position) across mode switches
+
+        let mutable currentFlyThroughController = ViewerCommon.createCameraController config.initialCameraView speed win
+
+        // Mutable orbit controller - only initialized when first entering orbit mode
+        let mutable currentOrbitController : (aval<CameraView> * aval<V3d>) option = None
+
+        // Adaptive view using custom function to handle both dynamic controllers
+        let view =
+            AVal.custom (fun token ->
+                match cameraMode.GetValue(token) with
+                | FlyThrough -> currentFlyThroughController.GetValue(token)
+                | Orbit ->
+                    match currentOrbitController with
+                    | Some controller -> (fst controller).GetValue(token)
+                    | None -> currentFlyThroughController.GetValue(token)  // Fallback during initialization
+            )
+
+        // Orbit center adaptive (for rendering sphere)
+        let orbitCenterAdaptive =
+            AVal.custom (fun token ->
+                match cameraMode.GetValue(token) with
+                | FlyThrough -> V3d.Zero  // not used in fly-through mode
+                | Orbit ->
+                    match currentOrbitController with
+                    | Some controller -> (snd controller).GetValue(token)
+                    | None -> V3d.Zero  // Fallback during initialization
+            )
+
+        let frustum = ViewerCommon.createFrustum win.Sizes config.scene.near config.scene.far DEFAULT_FOV
+
         // Setup common keyboard handlers
         ViewerCommon.setupCommonKeyboardHandlers win speed fillMode
-        
+
+        // Add O-key handler to toggle camera mode and recreate controllers dynamically
+        win.Keyboard.KeyDown(Keys.O).Values.Add(fun _ ->
+            // Read current values OUTSIDE transaction to avoid stale reads
+            let currentMode = cameraMode.GetValue()
+
+            match currentMode with
+            | FlyThrough ->
+                // Switching TO orbit mode - use saved distance or default
+                let currentView = currentFlyThroughController.GetValue()
+                let orbitDist =
+                    match savedOrbitDistance with
+                    | Some dist -> dist  // Restore saved distance to keep orbit distance invariant
+                    | None -> sceneSize  // Use default distance for first time
+                let newCenter = currentView.Location + currentView.Forward * orbitDist
+
+                transact (fun _ ->
+                    savedOrbitDistance <- Some orbitDist
+                    currentOrbitController <- Some (ViewerCommon.createOrbitController newCenter config.sky currentView speed win)
+                    cameraMode.Value <- Orbit
+                )
+
+            | Orbit ->
+                // Switching TO fly-through mode - save orbit distance and recreate fly-through controller
+                match currentOrbitController with
+                | Some controller ->
+                    let currentView = (fst controller).GetValue()
+                    let orbitCenter = (snd controller).GetValue()
+                    // Calculate distance from camera to orbit center
+                    let distanceToSave = (orbitCenter - currentView.Location).Length
+
+                    transact (fun _ ->
+                        savedOrbitDistance <- Some distanceToSave
+                        currentFlyThroughController <- ViewerCommon.createCameraController currentView speed win
+                        cameraMode.Value <- FlyThrough
+                    )
+                | None -> ()  // Should never happen, but safe to ignore
+        )
+
         // Add L-key handler only for View mode
         match config.mode with
         | ViewMode _ ->
-            win.Keyboard.KeyDown(Keys.L).Values.Add(fun _ -> 
+            win.Keyboard.KeyDown(Keys.L).Values.Add(fun _ ->
                 transact (fun _ -> lodVisEnabled.Value <- not lodVisEnabled.Value)
             )
         | DiffMode _ -> () // L-key doesn't apply to diff mode (no LoD structure)
@@ -234,53 +339,59 @@ module UnifiedViewer =
                     )
 
                 let cursorPos = AVal.init V3d.Zero
-                let cursor = 
-                    if viewConfig.enablePicking then
-                        Box3d.FromCenterAndSize(V3d.Zero, V3d(1.0, 1.0, 1.0) * DEFAULT_CURSOR_SIZE)
-                        |> Sg.box' C4b.White 
-                        |> Sg.trafo (cursorPos |> AVal.map Trafo3d.Translation)
-                        |> Sg.shader {
-                            do! DefaultSurfaces.stableTrafo
-                            do! noPick
-                        }
-                    else
-                        Sg.empty
-
+              
                 // Apply shaders to OPC scene
-                let opcSceneWithShaders = 
+                let opcSceneWithShaders =
                     Sg.ofList hierarchies
                     |> Sg.shader {
                         do! stableTrafo
-                        do! DefaultSurfaces.constantColor C4f.White 
-                        do! DefaultSurfaces.diffuseTexture 
+                        do! DefaultSurfaces.constantColor C4f.White
+                        do! DefaultSurfaces.diffuseTexture
                         do! LoDColor
                         do! encodePickIds
                     }
                     |> Sg.uniform "LodVisEnabled" lodVisEnabled
 
                 // Apply shaders to OBJ scene
-                let objSceneWithShaders = 
+                let objSceneWithShaders =
                     Sg.ofList viewConfig.objSceneGraphs
                     |> Sg.shader {
                         do! stableTrafo
-                        do! DefaultSurfaces.constantColor C4f.White 
-                        do! DefaultSurfaces.diffuseTexture 
+                        do! DefaultSurfaces.constantColor C4f.White
+                        do! DefaultSurfaces.diffuseTexture
                         do! LoDColor
                         do! noPick
                     }
                     |> Sg.uniform "LodVisEnabled" lodVisEnabled
-                
+
+                // Orbit center sphere (visible only in orbit mode)
+                let orbitCenterSphere =
+                    let isOrbitMode = cameraMode |> AVal.map (fun m -> match m with | Orbit -> true | _ -> false)
+                    Sg.sphere' 5 C4b.Yellow 0.2
+                    |> Sg.trafo (orbitCenterAdaptive |> AVal.map Trafo3d.Translation)
+                    |> Sg.shader {
+                        do! stableTrafo
+                        do! diffuseLighting
+                        do! noPick
+                    }
+                    |> Sg.onOff isOrbitMode
+
                 // Separate geometry (affected by wireframe) from overlays (always solid)
-                let geometryScene = 
+                let geometryScene =
                     opcSceneWithShaders
                     |> Sg.andAlso objSceneWithShaders
-                    |> Sg.andAlso cursor
                     |> Sg.viewTrafo (view |> AVal.map CameraView.viewTrafo)
                     |> Sg.projTrafo (frustum |> AVal.map Frustum.projTrafo)
                     |> Sg.fillMode fillMode
-                
-                // Combine geometry with overlays (no fillMode applied to full scene)
-                let combinedScene = geometryScene
+
+                // Combine geometry with overlays (orbit sphere is not affected by fillMode)
+                let combinedScene =
+                    geometryScene
+                    |> Sg.andAlso (
+                        orbitCenterSphere
+                        |> Sg.viewTrafo (view |> AVal.map CameraView.viewTrafo)
+                        |> Sg.projTrafo (frustum |> AVal.map Frustum.projTrafo)
+                    )
 
                 // Create offscreen buffer for view mode
                 let buffer = 
@@ -335,18 +446,16 @@ module UnifiedViewer =
                 let cursorPos = AVal.init V3d.NaN
                 let layerDistAtCursor = AVal.init nan
 
-                let cursorCone = Sg.cone' 16 C4b.Red (0.3 * DIFF_CURSOR_SIZE) (5.0 * DIFF_CURSOR_SIZE)
-                let rot = Trafo3d.Translation(0.0, 0.0, -5.0 * DIFF_CURSOR_SIZE) * Trafo3d.RotateInto(-V3d.ZAxis, config.sky)
-                    
-                let cursorBox = Box3d(V3d(-0.1, -0.1, 0.0) * DIFF_CURSOR_SIZE, V3d(0.1, 0.1, 10.0) * DIFF_CURSOR_SIZE)
-                let cursor = 
-                    //Box3d.FromCenterAndSize(V3d.Zero, V3d(1.0, 1.0, 10.0) * DIFF_CURSOR_SIZE)
-                    //cursorBox |> Sg.box' C4b.Red
-                    cursorCone
-                    |> Sg.trafo' rot
-                    |> Sg.trafo (pickPos |> AVal.map Trafo3d.Translation)
+                let cursor =
+
+                    let coneToSky = Sg.cone' 32 C4b.GreenYellow 0.05 1.0 |> Sg.trafo' (Trafo3d.Translation(0.0, 0.0, -1.0) * Trafo3d.RotateInto(-V3d.ZAxis, config.sky))
+                    let coneToGround = Sg.cone' 32 C4b.Green 0.01 1.0 |> Sg.trafo' (Trafo3d.Translation(0.0, 0.0, -1.0) * Trafo3d.RotateInto(V3d.ZAxis, config.sky))
+
+                    Sg.ofList [ coneToSky; coneToGround ]
+                    |> Sg.trafo (cursorPos |> AVal.map Trafo3d.Translation)
                     |> Sg.shader {
-                        do! DefaultSurfaces.stableTrafo
+                        do! stableTrafo
+                        do! diffuseLighting
                     }
 
                 // Diff-specific keyboard handlers
@@ -385,16 +494,16 @@ module UnifiedViewer =
                         let ray = Ray3d(view.Location, (pp - view.Location).Normalized)
                         
                         let hit0Result = diffConfig.env.Tree0.IntersectRay(&ray)
-                        let hit0 = if hit0Result.HasIntersection then Some(abs hit0Result.T, hit0Result.T) else None
+                        let hit0 = if hit0Result.HasIntersection then Some hit0Result.T else None
                         let hit1Result = diffConfig.env.Tree1.IntersectRay(&ray)
-                        let hit1 = if hit1Result.HasIntersection then Some(abs hit1Result.T, hit1Result.T) else None
+                        let hit1 = if hit1Result.HasIntersection then Some hit1Result.T else None
 
                         let (maybeT, isFirst) =
                             match hit0, hit1 with
                             | None, None -> (None, false)
-                            | Some (_, t0), None -> if t0 > 0.0 then (Some t0, true) else (None, false)
-                            | None, Some (_, t1) -> if t1 > 0.0 then (Some t1, false) else (None, false)
-                            | Some (_, t0), Some (_, t1) ->
+                            | Some t0, None -> if t0 > 0.0 then (Some t0, true) else (None, false)
+                            | None, Some t1 -> if t1 > 0.0 then (Some t1, false) else (None, false)
+                            | Some t0, Some t1 ->
                                 match t0 > 0, t1 > 0 with
                                 | false, false -> (None, false)
                                 | false, true -> (Some t1, false)
@@ -467,6 +576,17 @@ module UnifiedViewer =
                 let showFirst = toggleMode |> AVal.map (fun x -> match x with | First -> true | Second -> false)
                 let showSecond = toggleMode |> AVal.map (fun x -> match x with | First -> false | Second -> true)
 
+                // Orbit center sphere (visible only in orbit mode)
+                let orbitCenterSphere =
+                    let isOrbitMode = cameraMode |> AVal.map (fun m -> match m with | Orbit -> true | _ -> false)
+                    Sg.sphere' 5 C4b.Yellow 0.5
+                    |> Sg.trafo (orbitCenterAdaptive |> AVal.map Trafo3d.Translation)
+                    |> Sg.shader {
+                        do! stableTrafo
+                        do! diffuseLighting
+                    }
+                    |> Sg.onOff isOrbitMode
+
                 // Separate geometry from text overlay for diff mode
                 let geometryScene =
                     Sg.ofList [
@@ -474,14 +594,10 @@ module UnifiedViewer =
                         Sg.onOff showSecond hierarchies[1]
                     ]
                     |> Sg.andAlso cursor
+                    |> Sg.andAlso orbitCenterSphere
                 
-                // Combine but keep info separate for now
-                let combinedScene = 
-                    geometryScene
-                    |> Sg.andAlso info
-
-                // Apply wireframe only to geometry, not text
-                let geometryWithWireframe = 
+                // Apply fillMode only to geometry, not text
+                let geometryWithFillMode = 
                     geometryScene
                     |> Sg.viewTrafo (view |> AVal.map CameraView.viewTrafo)
                     |> Sg.projTrafo (frustum |> AVal.map Frustum.projTrafo)
@@ -497,7 +613,7 @@ module UnifiedViewer =
                 
                 // Combine geometry with text overlay (text stays solid)
                 let sg = 
-                    geometryWithWireframe
+                    geometryWithFillMode
                     |> Sg.andAlso info
 
                 // Create offscreen buffer for diff mode

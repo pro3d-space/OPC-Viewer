@@ -9,6 +9,20 @@ open FSharp.Data.Adaptive
 open Aardvark.SceneGraph
 open PRo3D.Viewer.Shared.RenderingConstants
 
+/// Camera controller mode
+type CameraMode =
+    | FlyThrough
+    | Orbit
+
+/// Orbit camera state
+type OrbitCameraState = {
+    Center: V3d
+    Distance: float
+    Azimuth: float
+    Elevation: float
+    Sky: V3d
+}
+
 /// Common viewer functionality shared between different viewer implementations
 module ViewerCommon =
     
@@ -41,12 +55,159 @@ module ViewerCommon =
         let keyboard = (^a : (member Keyboard : IKeyboard) win)
         let time = (^a : (member Time : aval<DateTime>) win)
         // DefaultCameraController.controlWithSpeed expects cval, so convert if needed
-        let speedCval = 
+        let speedCval =
             match speed with
             | :? cval<float> as c -> c
             | _ -> cval(speed.GetValue())
         initialView |> DefaultCameraController.controlWithSpeed speedCval mouse keyboard time
-    
+
+    /// Create orbit camera controller with center point and sky direction
+    /// Returns (cameraView, orbitCenter) where orbitCenter is adaptive for rendering
+    let inline createOrbitController (center : V3d) (sky : V3d) (initialView : CameraView) (speed : aval<float>) (win : ^a when ^a : (member Mouse : IMouse) and ^a : (member Keyboard : IKeyboard) and ^a : (member Time : aval<DateTime>)) : aval<CameraView> * aval<V3d> =
+        let mouse = (^a : (member Mouse : IMouse) win)
+        let keyboard = (^a : (member Keyboard : IKeyboard) win)
+
+        // Build sky-aligned coordinate frame
+        let skyNorm = Vec.normalize sky
+        let arbitraryNonParallel = if abs skyNorm.Z < 0.9 then V3d.OOI else V3d.IOO
+        let right = Vec.normalize (Vec.cross arbitraryNonParallel skyNorm)
+        let forward = Vec.normalize (Vec.cross skyNorm right)
+
+        // Initialize orbit state from initial view, computed in sky-aligned frame
+        // toCamera is FROM center TO camera (so we can add it to center later)
+        let toCamera = initialView.Location - center
+        let localVec = V3d(Vec.dot toCamera right, Vec.dot toCamera forward, Vec.dot toCamera skyNorm)
+        let initialDistance = toCamera.Length
+        let initialAzimuth = atan2 localVec.Y localVec.X
+        let initialElevation = asin (localVec.Z / initialDistance)
+
+        let orbitState = cval {
+            Center = center
+            Distance = initialDistance
+            Azimuth = initialAzimuth
+            Elevation = initialElevation
+            Sky = sky
+        }
+
+        // Handle mouse wheel for zoom (fixed 10% per tick, independent of speed)
+        mouse.Scroll.Values.Add(fun delta ->
+            transact (fun _ ->
+                let state = orbitState.Value
+                let zoomFactor = if delta > 0.0 then 0.9 else 1.1
+                let newDistance = state.Distance * zoomFactor |> max 0.1
+                orbitState.Value <- { state with Distance = newDistance }
+            )
+        )
+
+        // Handle mouse drag for rotation, zoom, and pan
+        let mutable lastPos : V2i option = None
+        let mutable leftDragging = false
+        let mutable rightDragging = false
+        let mutable middleDragging = false
+
+        mouse.Down.Values.Add(fun btn ->
+            match btn with
+            | MouseButtons.Left -> leftDragging <- true
+            | MouseButtons.Right -> rightDragging <- true
+            | MouseButtons.Middle -> middleDragging <- true
+            | _ -> ()
+        )
+
+        mouse.Up.Values.Add(fun btn ->
+            match btn with
+            | MouseButtons.Left -> leftDragging <- false; lastPos <- None
+            | MouseButtons.Right -> rightDragging <- false; lastPos <- None
+            | MouseButtons.Middle -> middleDragging <- false; lastPos <- None
+            | _ -> ()
+        )
+
+        mouse.Move.Values.Add(fun (_, p) ->
+            let currentPos = V2i(int p.Position.X, int p.Position.Y)
+
+            match lastPos with
+            | Some last ->
+                let delta = V2d(float (currentPos.X - last.X), float (currentPos.Y - last.Y))
+
+                if leftDragging then
+                    // Left button: orbit rotation (4x slower than before)
+                    transact (fun _ ->
+                        let state = orbitState.Value
+                        let currentSpeed = speed.GetValue()
+                        let sensitivity = 0.00125 * currentSpeed
+                        let newAzimuth = state.Azimuth - delta.X * sensitivity
+                        let newElevation = state.Elevation + delta.Y * sensitivity |> clamp (-Constant.PiHalf + 0.01) (Constant.PiHalf - 0.01)
+                        orbitState.Value <- { state with Azimuth = newAzimuth; Elevation = newElevation }
+                    )
+
+                elif rightDragging then
+                    // Right button: smooth zoom (up = zoom out, down = zoom in)
+                    transact (fun _ ->
+                        let state = orbitState.Value
+                        let zoomSpeed = 0.0075
+                        let zoomFactor = 1.0 + (delta.Y * zoomSpeed)
+                        let newDistance = state.Distance * zoomFactor |> max 0.1
+                        orbitState.Value <- { state with Distance = newDistance }
+                    )
+
+                elif middleDragging then
+                    // Middle button: screen-space pan (moves orbit center)
+                    transact (fun _ ->
+                        let state = orbitState.Value
+                        let view =
+                            // Reconstruct current camera view to get right/up vectors
+                            let cosElev = cos state.Elevation
+                            let sinElev = sin state.Elevation
+                            let cosAzim = cos state.Azimuth
+                            let sinAzim = sin state.Azimuth
+                            let x = state.Distance * cosElev * cosAzim
+                            let y = state.Distance * cosElev * sinAzim
+                            let z = state.Distance * sinElev
+                            let location = state.Center + x * right + y * forward + z * skyNorm
+                            let forwardVec = (state.Center - location).Normalized
+                            let rightVec = forwardVec.Cross(state.Sky).Normalized
+                            let upVec = rightVec.Cross(forwardVec).Normalized
+                            CameraView(state.Sky, location, forwardVec, upVec, rightVec)
+
+                        // Pan in screen space (relative to camera)
+                        let panSpeed = state.Distance * 0.001
+                        let panOffset = -delta.X * panSpeed * view.Right + delta.Y * panSpeed * view.Up
+                        let newCenter = state.Center + panOffset
+                        orbitState.Value <- { state with Center = newCenter }
+                    )
+            | None -> ()
+
+            lastPos <- Some currentPos
+        )
+
+        // Convert orbit state to camera view
+        let cameraView = orbitState |> AVal.map (fun state ->
+            // Build camera position in sky-aligned coordinate frame
+            let cosElev = cos state.Elevation
+            let sinElev = sin state.Elevation
+            let cosAzim = cos state.Azimuth
+            let sinAzim = sin state.Azimuth
+
+            // Position in local frame (right, forward, sky)
+            let x = state.Distance * cosElev * cosAzim  // along right axis
+            let y = state.Distance * cosElev * sinAzim  // along forward axis
+            let z = state.Distance * sinElev            // along sky axis
+
+            // Transform from local frame to world coordinates
+            let location = state.Center + x * right + y * forward + z * skyNorm
+            let forwardVec = (state.Center - location).Normalized
+
+            // Use sky as up vector
+            let rightVec = forwardVec.Cross(state.Sky).Normalized
+            let upVec = rightVec.Cross(forwardVec).Normalized
+
+            CameraView(state.Sky, location, forwardVec, upVec, rightVec)
+        )
+
+        // Extract adaptive orbit center for rendering
+        let orbitCenter = orbitState |> AVal.map (fun state -> state.Center)
+
+        (cameraView, orbitCenter)
+
     /// Create perspective frustum for the viewer
     let createFrustum (sizes : aval<V2i>) (near : float) (far : float) (fov : float) =
         sizes |> AVal.map (fun s -> 

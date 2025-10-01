@@ -297,7 +297,6 @@ module Utils =
 
     let createInitialCameraView (gbb : Box3d) : CameraViewAndNearFar =
         let globalSky = gbb.Center.Normalized
-        //let globalSky = V3d(globalSky.X, globalSky.Z, -globalSky.Y)
         let plane = Plane3d(globalSky, 0.0)
         let plane2global pos = gbb.Center + plane.GetPlaneSpaceTransform().TransformPos(pos)
 
@@ -308,7 +307,13 @@ module Utils =
         let globalLocation = plane2global localLocation
         let globalLookAt   = plane2global localLookAt
 
-        let cam = CameraView.lookAt globalLocation globalLookAt globalSky
+        let cam =
+            let forward = (globalLookAt - globalLocation).Normalized
+            let right = forward.Cross(globalSky).Normalized
+            let up = right.Cross(forward).Normalized
+            CameraView(sky = globalSky, location = globalLocation, forward = forward, up = up, right = right)
+
+        //let cam = CameraView.lookAt globalLocation globalLookAt globalSky
 
         let far = d * 1.5
         let near = far / 1024.0

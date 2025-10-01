@@ -1,3 +1,6 @@
+## 1.1.11
+- orbit controller
+
 ## 1.1.10
 - improved dist visualization
 - diff cursor now shows sky direction

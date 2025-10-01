@@ -24,13 +24,6 @@ module RenderingConstants =
     let RGB_TO_GRAYSCALE_G = 0.7152
     let RGB_TO_GRAYSCALE_B = 0.0722
     
-    /// Default cursor sizes
-    [<Literal>]
-    let DEFAULT_CURSOR_SIZE = 0.5
-    
-    [<Literal>]
-    let DIFF_CURSOR_SIZE = 0.002
-    
     /// UI text positioning and scaling
     [<Literal>]
     let TEXT_SCALE = 0.04
