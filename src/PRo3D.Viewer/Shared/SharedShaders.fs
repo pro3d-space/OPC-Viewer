@@ -7,6 +7,11 @@ open PRo3D.Viewer.Shared.RenderingConstants
 
 /// Common shader functions shared between viewers
 module SharedShaders =
+
+    type PickBuffer = { [<Semantic("PickIds")>] id : int }
+
+    let noPick (v : Aardvark.Rendering.Effects.Vertex) =
+        fragment { return { id = -1 } }
     
     /// Vertex type for shader processing
     type Vertex = {

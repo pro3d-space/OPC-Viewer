@@ -18,6 +18,7 @@ open PRo3D.Viewer.Shared.RenderingConstants
 open System
 open FShade
 open Aardvark.FontProvider
+open PRo3D.Viewer.Ribbon
 
 // Font type for text overlays
 type DiffFont = GoogleFontProvider<"Roboto Mono">
@@ -33,6 +34,8 @@ and ViewModeConfig = {
     objSceneGraphs : ISg list
     /// Enable object picking and cursor
     enablePicking : bool
+    ribbonSg       : ISg 
+    patchTrafos    : Trafo3d list
 }
 
 /// Configuration for Diff mode  
@@ -126,11 +129,6 @@ module UnifiedViewer =
         let encodePickIds (v : Vertex) = 
             fragment {
                 return { id = uniform.PatchId }
-            }
-
-        let noPick (v : Vertex) = 
-            fragment {
-                return { id = -1 }
             }
 
         // Diff-specific vertex type
@@ -331,11 +329,18 @@ module UnifiedViewer =
                         DefaultSemantic.DepthStencil, TextureFormat.Depth24Stencil8
                         pickIdSym, TextureFormat.R32i
                     ]
-
                 let hierarchies = 
-                    config.scene.patchHierarchies |> Seq.toList |> List.map (fun basePath -> 
+                    config.scene.patchHierarchies 
+                    |> Seq.toList 
+                    |> List.mapi (fun i basePath -> 
                         let h = PatchHierarchy.load serializer.Pickle serializer.UnPickle (OpcPaths.OpcPaths basePath)
-                        View.OpcRendering.createSceneGraphCustom framebufferSignature runner infoTable basePath h
+                        let sg = View.OpcRendering.createSceneGraphCustom framebufferSignature runner infoTable basePath h
+                        let trafo =
+                            viewConfig.patchTrafos
+                            |> List.tryItem i
+                            |> Option.defaultValue Trafo3d.Identity
+                        if trafo = Trafo3d.Identity then sg :> ISg
+                        else sg |> Sg.trafo' trafo :> ISg
                     )
 
                 let cursorPos = AVal.init V3d.Zero
@@ -360,7 +365,7 @@ module UnifiedViewer =
                         do! DefaultSurfaces.constantColor C4f.White
                         do! DefaultSurfaces.diffuseTexture
                         do! LoDColor
-                        do! noPick
+                        do! SharedShaders.noPick
                     }
                     |> Sg.uniform "LodVisEnabled" lodVisEnabled
 
@@ -372,7 +377,7 @@ module UnifiedViewer =
                     |> Sg.shader {
                         do! stableTrafo
                         do! diffuseLighting
-                        do! noPick
+                        do! SharedShaders.noPick
                     }
                     |> Sg.onOff isOrbitMode
 
@@ -380,6 +385,7 @@ module UnifiedViewer =
                 let geometryScene =
                     opcSceneWithShaders
                     |> Sg.andAlso objSceneWithShaders
+                    |> Sg.andAlso viewConfig.ribbonSg
                     |> Sg.viewTrafo (view |> AVal.map CameraView.viewTrafo)
                     |> Sg.projTrafo (frustum |> AVal.map Frustum.projTrafo)
                     |> Sg.fillMode fillMode

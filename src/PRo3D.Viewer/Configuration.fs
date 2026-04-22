@@ -19,6 +19,7 @@ module Configuration =
         Verbose: bool option
         CameraOutlierPercentile: float option  // Percentile to trim outliers for camera positioning (default: 2.5)
         Version: string  // Application version for display
+        Ribbon : Project.RibbonConfig option
     }
     
     /// Configuration for the Diff command

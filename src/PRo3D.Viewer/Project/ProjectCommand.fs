@@ -25,7 +25,6 @@ module ProjectCommand =
     // These conversion functions have been removed - use ConfigurationBuilder instead
 
     let run (version: string) (args : ParseResults<Args>) (globalScreenshots: string option) : int =
-        
         let projectFilePath = args.GetResult(Args.ProjectFile)
         
         // Get the directory containing the project file for path resolution

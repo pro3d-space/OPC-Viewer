@@ -148,6 +148,7 @@ let tests =
                     Verbose = None
                     CameraOutlierPercentile = None
                     Version = "1.0.0-test"
+                    Ribbon = None
                 }
                 
                 // Both should have Screenshots field with same value
@@ -181,6 +182,7 @@ let tests =
                     Verbose = None
                     CameraOutlierPercentile = None
                     Version = "1.0.0-test"
+                    Ribbon = None
                 }
                 
                 // Common fields should behave the same

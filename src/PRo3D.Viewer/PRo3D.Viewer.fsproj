@@ -10,6 +10,11 @@
     <Compile Include="Shared\RenderingConstants.fs" />
     <Compile Include="Shared\SharedShaders.fs" />
     <Compile Include="Shared\ViewerCommon.fs" />
+    <Compile Include="DnSPlane\RegressionInfo.fs" />
+	<Compile Include="DnSPlane/RibbonTypes.fs" />
+	<Compile Include="DnSPlane/RibbonAlgorithms.fs" />
+	<Compile Include="DnSPlane/RibbonShaders.fs" />
+	<Compile Include="DnSPlane/RibbonScene.fs" />
     <Compile Include="Utils.fs" />
     <Compile Include="Data.fs" />
     <Compile Include="Diff\DiffInfo.fs" />
@@ -31,6 +36,9 @@
     <Compile Include="Usage.fs" />
     <Compile Include="Project\DryRunSerializer.fs" />
     <Compile Include="Program.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Aardvark.Geometry" Version="5.3.21" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

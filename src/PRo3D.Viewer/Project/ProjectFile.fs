@@ -19,6 +19,11 @@ type DataEntry = {
     Transform: M44d option
 }
 
+type RibbonConfig = {
+    GeoJson   : string
+    HalfWidth : float option
+    Mode      : string option
+}
 
 /// View command project configuration - strongly typed public API
 type ViewProject = {
@@ -32,6 +37,7 @@ type ViewProject = {
     Screenshots: string option
     ForceDownload: bool option
     CameraOutlierPercentile: float option
+    Ribbon : RibbonConfig option 
 }
 
 /// Diff command project configuration - strongly typed public API
@@ -188,6 +194,25 @@ module ProjectFile =
                         | true, prop when prop.ValueKind = JsonValueKind.Number -> Some (prop.GetDouble())
                         | _ -> None
 
+                    let ribbon =
+                        match root.TryGetProperty("ribbon") with
+                        | true, prop when prop.ValueKind = JsonValueKind.Object ->
+                            match prop.TryGetProperty("geojson") with
+                            | true, gj when gj.ValueKind = JsonValueKind.String ->
+                                Some {
+                                    GeoJson   = gj.GetString()
+                                    HalfWidth =
+                                        match prop.TryGetProperty("halfWidth") with
+                                        | true, hw when hw.ValueKind = JsonValueKind.Number -> Some (hw.GetDouble())
+                                        | _ -> None
+                                    Mode =
+                                        match prop.TryGetProperty("mode") with
+                                        | true, m when m.ValueKind = JsonValueKind.String -> Some (m.GetString())
+                                        | _ -> None
+                                }
+                            | _ -> None
+                        | _ -> None
+
                     // Validate paths
                     let hasDangerousPath = 
                         data
@@ -211,6 +236,7 @@ module ProjectFile =
                             ForceDownload = forceDownload
                             Verbose = verbose
                             CameraOutlierPercentile = cameraOutlierPercentile
+                            Ribbon = ribbon
                         }
                         ViewConfig viewProject
         with

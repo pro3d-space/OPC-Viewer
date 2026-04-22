@@ -42,6 +42,7 @@ module DryRunSerializer =
             ForceDownload = if args.Contains ViewCommand.Args.ForceDownload then Some true else None
             Verbose = if args.Contains ViewCommand.Args.Verbose then Some true else None
             CameraOutlierPercentile = None
+            Ribbon = None
         }
     
     /// Converts Diff command arguments to DiffProject

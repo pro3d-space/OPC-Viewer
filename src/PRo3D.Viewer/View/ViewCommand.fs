@@ -10,6 +10,9 @@ open PRo3D.Viewer.Configuration
 open PRo3D.Viewer.Shared
 open PRo3D.Viewer.Shared.CommandUtils
 open Aardvark.Data.Remote
+open Aardvark.SceneGraph
+
+open PRo3D.Viewer.Ribbon
 
 [<AutoOpen>]
 module ViewCommand =
@@ -179,32 +182,83 @@ module ViewCommand =
             else
                 []
 
+        // Try to find and load a .trafo file alongside the OPC dataset
+        let loadTrafoFile (opcPath : string) : Trafo3d option =
+            let dir = 
+                if System.IO.Directory.Exists opcPath then opcPath
+                else System.IO.Path.GetDirectoryName opcPath
+            System.IO.Directory.GetFiles(dir, "*.trafo")
+            |> Array.tryHead
+            |> Option.bind (fun trafoFile ->
+                try
+                    let json = System.IO.File.ReadAllText trafoFile
+                    use doc  = System.Text.Json.JsonDocument.Parse json
+                    let arr  = doc.RootElement
+                    let parseMat (el : System.Text.Json.JsonElement) =
+                        let rows = el.EnumerateArray() |> Seq.toArray
+                        M44d(
+                            rows.[0].[0].GetDouble(), rows.[0].[1].GetDouble(), rows.[0].[2].GetDouble(), rows.[0].[3].GetDouble(),
+                            rows.[1].[0].GetDouble(), rows.[1].[1].GetDouble(), rows.[1].[2].GetDouble(), rows.[1].[3].GetDouble(),
+                            rows.[2].[0].GetDouble(), rows.[2].[1].GetDouble(), rows.[2].[2].GetDouble(), rows.[2].[3].GetDouble(),
+                            rows.[3].[0].GetDouble(), rows.[3].[1].GetDouble(), rows.[3].[2].GetDouble(), rows.[3].[3].GetDouble()
+                        )
+                    let forward = parseMat arr.[0]
+                    let inverse = parseMat arr.[1]
+                    printfn "[TRAFO] loaded .trafo file: %s" trafoFile
+                    Some (Trafo3d(forward, inverse))
+                with ex ->
+                    printfn "[TRAFO] failed to load .trafo file: %s" ex.Message
+                    None
+            )
+        // Load a trafo per OPC entry — one trafo file per dataset folder
+        let opcTrafos : Trafo3d[] =
+            opcEntries |> Array.map (fun e ->
+                match e.Transform with
+                | Some m -> Trafo3d(m, m.Inverse)
+                | None   ->
+                    match loadTrafoFile e.Path with
+                    | Some t -> t
+                    | None   -> Trafo3d.Identity
+            )
+
         // get root patch from each hierarchy
         let patches =
             patchHierarchies
             |> List.map (fun x -> match x.tree with | QTree.Node (n, _) -> n | QTree.Leaf n -> n)
 
-         // global bounding box - compute from available data
-        let gbb = 
+        // Pair each layerInfo with the trafo of the opcEntry whose path contains it
+        let layerInfosWithTrafos : (LayerInfo * Trafo3d) list =
+            layerInfos |> List.map (fun li ->
+                let trafo =
+                    opcEntries
+                    |> Array.tryFindIndex (fun e ->
+                        li.Path.FullName.StartsWith(
+                            System.IO.Path.GetFullPath(e.Path),
+                            System.StringComparison.OrdinalIgnoreCase))
+                    |> Option.map (fun i -> opcTrafos.[i])
+                    |> Option.defaultValue Trafo3d.Identity
+                li, trafo
+            )
+
+        let gbb =
             match patches.Length, objBounds with
             | 0, None ->
-                // No data at all - shouldn't happen due to earlier validation
-                printfn "[WARNING] No geometry found, using default bounding box"
                 Box3d(V3d(-10,-10,-10), V3d(10,10,10))
             | 0, Some objBox ->
-                // OBJ only
-                printfn "[INFO] Using bounding box from OBJ files: %A" objBox
                 objBox
-            | _, None ->
-                // OPC only (existing behavior)
-                printfn "[INFO] Using bounding box from OPC patches"
-                patches |> Seq.map (fun patch -> patch.info.GlobalBoundingBox) |> Box3d
-            | _, Some objBox ->
-                // Both OPC and OBJ - combine bounds
-                let opcBox = patches |> Seq.map (fun patch -> patch.info.GlobalBoundingBox) |> Box3d
-                let combinedBox = Box3d [opcBox; objBox]
-                printfn "[INFO] Combining OPC and OBJ bounding boxes: %A" combinedBox
-                combinedBox
+            | _, _ ->
+                let opcBox =
+                    List.zip patches (layerInfosWithTrafos |> List.map snd)
+                    |> List.map (fun (patch, trafo) ->
+                        patch.info.GlobalBoundingBox.Transformed(trafo.Forward))
+                    |> Box3d
+                match objBounds with
+                | Some objBox -> Box3d [opcBox; objBox]
+                | None        -> opcBox
+
+        printfn "[DEBUG] final gbb = %A" gbb
+        printfn "[DEBUG] gbb.Center = %A" gbb.Center
+        printfn "[DEBUG] gbb.Size = %A" gbb.Size
 
         // create OpcScene ...
         let initialCam =
@@ -221,25 +275,13 @@ module ViewCommand =
                 // Use standard patch-based bounding box calculation
                 Utils.createInitialCameraView gbb
         let speed = config.Speed |> Option.defaultValue (initialCam.Far / 64.0)
-        
-        // Determine OPC transformation - use first non-identity transform or identity
-        let opcTransform = 
-            let dataTransforms = opcEntries |> Array.map (fun e -> e.Transform)
-            if dataTransforms.Length > 0 then
-                // Find first non-None transform, or use identity
-                match dataTransforms |> Array.tryFind Option.isSome with
-                | Some (Some m) -> 
-                    printfn "[OPC] Applying transformation to OPC data"
-                    Trafo3d(m, m.Inverse)
-                | _ -> Trafo3d.Identity
-            else
-                Trafo3d.Identity
-        
+
         let opcScene =
             { 
                 useCompressedTextures = true
-                preTransform     = opcTransform
-                patchHierarchies = Seq.delay (fun _ -> layerInfos |> Seq.map (fun info -> info.Path.FullName))
+                preTransform     = Trafo3d.Identity
+                patchHierarchies = Seq.delay (fun _ ->
+                    layerInfosWithTrafos |> Seq.map (fun (info, _) -> info.Path.FullName))
                 boundingBox      = gbb
                 near             = initialCam.Near
                 far              = initialCam.Far
@@ -250,11 +292,42 @@ module ViewCommand =
         // Parse background color if provided
         let backgroundColor = parseBackgroundColor config.BackgroundColor
 
+        let ribbonSg =
+            match config.Ribbon with
+            | None -> Sg.empty
+            | Some ribbonCfg ->
+                let mode =
+                    match ribbonCfg.Mode with
+                    | Some "Stabilized"   -> Stabilized
+                    | Some "FrenetSerret" -> FrenetSerret
+                    | Some "Bishop"       -> Bishop
+                    | Some "RMF"          -> RMF
+                    | _                   -> Basic
+                let halfWidth = ribbonCfg.HalfWidth |> Option.defaultValue 2.0
+                match PRo3D.Viewer.Ribbon.GeoJson.tryParseLineString ribbonCfg.GeoJson with
+                | Result.Error err ->
+                    printfn "[RIBBON ERROR] %s" err
+                    Sg.empty
+                | Result.Ok pts ->
+                    let localPts = pts //|> Array.map (fun p -> opcTransform.Backward.TransformPos(p))
+                    RibbonScene.build
+                        { RibbonState.defaultState with
+                            polylinePoints = localPts
+                            halfWidth      = halfWidth
+                            extrusionMode  = mode
+                            showPolyline   = true }
+                        None
+
+        let patchTrafos =
+            layerInfosWithTrafos |> List.map snd
+
         // ... and show it using the unified viewer
         let viewerConfig : ViewerConfig = {
             mode = ViewerMode.ViewMode {
                 objSceneGraphs = objScene
                 enablePicking = true
+                ribbonSg       = ribbonSg
+                patchTrafos    = patchTrafos
             }
             scene = opcScene
             sky = match List.first patchHierarchies with | Some x -> Utils.getSky x | None -> V3d.ZAxis
@@ -297,5 +370,6 @@ module ViewCommand =
             Verbose = if args.Contains Args.Verbose then Some true else None
             CameraOutlierPercentile = None  // Not supported in CLI, use project files
             Version = version
+            Ribbon = None
         }
         execute config

@@ -136,6 +136,7 @@ let tests =
                     Verbose = None
                     CameraOutlierPercentile = None
                     Version = "1.0.0-test"
+                    Ribbon = None
                 }
                 Expect.equal config.Data.Length 0 "Empty data array should have length 0"
             }
@@ -153,6 +154,7 @@ let tests =
                     Verbose = None
                     CameraOutlierPercentile = None
                     Version = "1.0.0-test"
+                    Ribbon = None
                 }
                 Expect.equal config.Screenshots screenshotPath "Screenshots path should match"
             }

@@ -39,6 +39,7 @@ module ConfigurationBuilder =
             Verbose = if args.Contains ViewCommand.Args.Verbose then Some true else None
             CameraOutlierPercentile = None  // No CLI arg yet, use default
             Version = version
+            Ribbon = None
         }
     
     /// Build ViewConfig from parsed JSON project
@@ -79,6 +80,7 @@ module ConfigurationBuilder =
             Verbose = project.Verbose
             CameraOutlierPercentile = project.CameraOutlierPercentile
             Version = version
+            Ribbon = project.Ribbon
         }
     
     /// Build DiffConfig from command-line arguments
