@@ -410,6 +410,24 @@ module UnifiedViewer =
                 win.Keyboard.KeyDown(Keys.Up).Values.Add(fun _ ->
                     modifyRibbon (fun s -> { s with normalWindowSize = min 20 (s.normalWindowSize + 1) })
                 )
+                win.Keyboard.KeyDown(Keys.Left).Values.Add(fun _ ->
+                    modifyRibbon (fun s ->
+                        let n = s.allPolylines.Length
+                        if n = 0 then s
+                        else
+                            let idx = (s.selectedIndex - 1 + n) % n
+                            printfn "[RIBBON] feature %d / %d" (idx + 1) n
+                            { s with selectedIndex = idx })
+                )
+                win.Keyboard.KeyDown(Keys.Right).Values.Add(fun _ ->
+                    modifyRibbon (fun s ->
+                        let n = s.allPolylines.Length
+                        if n = 0 then s
+                        else
+                            let idx = (s.selectedIndex + 1) % n
+                            printfn "[RIBBON] feature %d / %d" (idx + 1) n
+                            { s with selectedIndex = idx })
+                )
 
                 // Separate geometry (affected by wireframe) from overlays (always solid)
                 let geometryScene =

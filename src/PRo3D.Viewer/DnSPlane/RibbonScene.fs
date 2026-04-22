@@ -6,122 +6,91 @@ open Aardvark.Base
 open Aardvark.Rendering
 open Aardvark.SceneGraph
 open FSharp.Data.Adaptive
-open Aardvark.UI.Primitives
 open PRo3D.Viewer.Shared
 
-/// GeoJSON import: reads the first LineString geometry from a file.
+/// GeoJSON import.
 module GeoJson =
 
-    /// Try to read the first LineString geometry from a GeoJSON file.
-    /// Handles FeatureCollection, Feature, or bare Geometry objects.
-    /// Returns Ok(points) or Error(message).
-    let tryParseLineString (path : string) : Result<V3d array, string> =
+    /// Parse coordinates from a LineString geometry element.
+    let private extractPoints (geom : JsonElement) : V3d[] option =
+        let mutable coordsEl = Unchecked.defaultof<JsonElement>
+        if not (geom.TryGetProperty("coordinates", &coordsEl)) then None
+        else
+            let pts =
+                coordsEl.EnumerateArray()
+                |> Seq.map (fun c ->
+                    let nums =
+                        c.EnumerateArray()
+                        |> Seq.map (fun v -> v.GetDouble())
+                        |> Seq.toArray
+                    V3d(nums.[0], nums.[1], if nums.Length > 2 then nums.[2] else 0.0))
+                |> Seq.toArray
+            if pts.Length < 2 then None else Some pts
+
+    /// Parse all LineString features from a GeoJSON file.
+    /// Returns an array of (name, points) pairs — one per LineString.
+    let tryParseAllLineStrings (path : string) : Result<(string * V3d[]) array, string> =
         try
             if not (File.Exists path) then
                 Result.Error (sprintf "File not found: %s" path)
             else
-                let json = File.ReadAllText path
-                let doc  = JsonDocument.Parse json
-                let root = doc.RootElement
+                let json    = File.ReadAllText path
+                let doc     = JsonDocument.Parse json
+                let root    = doc.RootElement
+                let results = System.Collections.Generic.List<string * V3d[]>()
+                let mutable idx = 0
 
-                // Navigate to the first LineString geometry element.
-                let findGeom (el : JsonElement) : JsonElement option =
-                    let mutable featuresEl = Unchecked.defaultof<JsonElement>
-                    let mutable geometryEl = Unchecked.defaultof<JsonElement>
-                    let mutable typeEl     = Unchecked.defaultof<JsonElement>
+                let mutable featuresEl = Unchecked.defaultof<JsonElement>
+                let mutable typeEl     = Unchecked.defaultof<JsonElement>
 
-                    if el.TryGetProperty("features", &featuresEl) then
-                        // FeatureCollection → search features
-                        featuresEl.EnumerateArray()
-                        |> Seq.tryPick (fun feat ->
-                            let mutable g = Unchecked.defaultof<JsonElement>
-                            let mutable t = Unchecked.defaultof<JsonElement>
-                            if feat.TryGetProperty("geometry", &g) then
-                                if g.TryGetProperty("type", &t) && t.GetString() = "LineString"
-                                then Some g
-                                else None
-                            else None)
-                    elif el.TryGetProperty("geometry", &geometryEl) then
-                        // Feature → check its geometry
-                        let mutable t = Unchecked.defaultof<JsonElement>
-                        if geometryEl.TryGetProperty("type", &t) && t.GetString() = "LineString"
-                        then Some geometryEl
-                        else None
-                    elif el.TryGetProperty("type", &typeEl) && typeEl.GetString() = "LineString" then
-                        // Bare geometry
-                        Some el
-                    else
-                        None
+                if root.TryGetProperty("features", &featuresEl) then
+                    // FeatureCollection → iterate all features
+                    for feat in featuresEl.EnumerateArray() do
+                        let mutable geomEl = Unchecked.defaultof<JsonElement>
+                        let mutable tEl    = Unchecked.defaultof<JsonElement>
+                        if feat.TryGetProperty("geometry", &geomEl) &&
+                           geomEl.TryGetProperty("type", &tEl) &&
+                           tEl.GetString() = "LineString" then
+                            // Try to get name from properties
+                            let mutable propsEl = Unchecked.defaultof<JsonElement>
+                            let mutable nameEl  = Unchecked.defaultof<JsonElement>
+                            let name =
+                                if feat.TryGetProperty("properties", &propsEl) &&
+                                   propsEl.TryGetProperty("name", &nameEl) &&
+                                   nameEl.ValueKind = JsonValueKind.String
+                                then nameEl.GetString()
+                                else sprintf "Feature %d" idx
+                            match extractPoints geomEl with
+                            | Some pts -> results.Add(name, pts); idx <- idx + 1
+                            | None     -> ()
+                elif root.TryGetProperty("type", &typeEl) && typeEl.GetString() = "LineString" then
+                    // Bare LineString geometry
+                    match extractPoints root with
+                    | Some pts -> results.Add("Feature 0", pts)
+                    | None     -> ()
 
-                match findGeom root with
-                | None ->
-                    Result.Error "No LineString geometry found in the file."
-                | Some geom ->
-                    let mutable coordsEl = Unchecked.defaultof<JsonElement>
-                    if not (geom.TryGetProperty("coordinates", &coordsEl)) then
-                        Result.Error "LineString has no 'coordinates' property."
-                    else
-                        let pts =
-                            coordsEl.EnumerateArray()
-                            |> Seq.map (fun c ->
-                                let nums =
-                                    c.EnumerateArray()
-                                    |> Seq.map (fun v -> v.GetDouble())
-                                    |> Seq.toArray
-                                let x = nums.[0]
-                                let y = nums.[1]
-                                let z = if nums.Length > 2 then nums.[2] else 0.0
-                                V3d(x, y, z))
-                            |> Seq.toArray
-                        if pts.Length < 2 then
-                            Result.Error (sprintf "LineString has only %d point(s); need at least 2." pts.Length)
-                        else
-                            Ok pts
+                if results.Count = 0 then
+                    Result.Error "No LineString geometries found."
+                else
+                    Result.Ok (results |> Seq.toArray)
         with ex ->
             Result.Error (sprintf "Parse error: %s" ex.Message)
 
-
-/// Update function for RibbonState — pure, no side effects.
-module RibbonUpdate =
-
-    let update (model : RibbonState) (msg : RibbonMessage) =
-        match msg with
-        | Camera m           -> { model with cameraState   = FreeFlyController.update model.cameraState m }
-        | IncreaseWidth      -> { model with halfWidth      = min 5.0 (model.halfWidth + 0.5) }
-        | DecreaseWidth      -> { model with halfWidth      = max 0.5 (model.halfWidth - 0.5) }
-        | TogglePolyline     -> { model with showPolyline   = not model.showPolyline }
-        | ToggleNormals      -> { model with showNormals    = not model.showNormals  }
-        | SetExtrusionMode m -> { model with extrusionMode  = m }
-        | SetImportPath p    -> { model with importPath     = p; importError = "" }
-        | ImportGeoJson      ->
-            match GeoJson.tryParseLineString model.importPath with
-            | Ok pts    ->
-                // Compute centroid and a camera distance from the bounding extents.
-                let centroid =
-                    pts |> Array.fold (fun a p -> a + p) V3d.Zero
-                        |> fun s -> s / float pts.Length
-                let maxDist  =
-                    pts |> Array.map (fun p -> (p - centroid).Length) |> Array.max
-                let dist     = max 10.0 (maxDist * 3.0)
-                let newView  = CameraView.lookAt (centroid + V3d(0.0, -dist, dist * 0.5)) centroid V3d.ZAxis
-                { model with
-                    polylinePoints = pts
-                    importError    = ""
-                    cameraState    = { model.cameraState with view = newView } }
-            | Result.Error err -> { model with importError = err }
+    /// Convenience: parse only the first LineString (backward compat).
+    let tryParseLineString (path : string) : Result<V3d[], string> =
+        tryParseAllLineStrings path |> Result.map (fun arr -> snd arr.[0])
 
 
-/// Scene graph builders — all functions return an ISg that can be composed
-/// into any larger scene graph with Sg.ofList.
+/// Scene graph builders.
 module RibbonScene =
 
     // ── private helpers ───────────────────────────────────────────────────────
 
     /// Orange ribbon mesh, extruded on the GPU via RibbonShaders.extrude.
     let private ribbonSg
-            (mode        : ExtrusionMode)
-            (controlPts  : (V3d * V3d)[])
-            (halfWidth   : float)
+            (mode       : ExtrusionMode)
+            (controlPts : (V3d * V3d)[])
+            (halfWidth  : float)
             : ISg =
         let centers, dipVecsArr, sides, indices =
             RibbonAlgorithms.buildSurface mode controlPts
@@ -189,22 +158,16 @@ module RibbonScene =
             do! SharedShaders.noPick
         }
 
-    /// Build the complete ribbon scene graph from the current RibbonState.
-    ///
-    /// The returned ISg can be composed directly with the OPC scene graph:
-    ///
-    ///   let scene = Sg.ofList [ opcSg; RibbonScene.build ribbonState ]
-    ///
-    /// Pass an optional world-space transform (e.g. to align local ribbon
-    /// coordinates with planet-centred OPC coordinates).
-    let build
-            (state     : RibbonState)
-            (transform : Trafo3d option)
-            : ISg =
-        if state.polylinePoints.Length < 2 then Sg.ofList []
+    // ── public API ────────────────────────────────────────────────────────────
+
+    /// Build the scene graph for the currently selected polyline in RibbonState.
+    let build (state : RibbonState) (transform : Trafo3d option) : ISg =
+        let pts = RibbonState.currentPoints state
+        if pts.Length < 2 then
+            Sg.ofList []
         else
-            let normals = RibbonAlgorithms.computeNormals V3d.ZAxis state.normalWindowSize state.polylinePoints
-            let cps      = Array.zip state.polylinePoints normals
+            let normals = RibbonAlgorithms.computeNormals V3d.ZAxis state.normalWindowSize pts
+            let cps     = Array.zip pts normals
 
             let parts =
                 [ yield ribbonSg state.extrusionMode cps state.halfWidth
@@ -216,31 +179,3 @@ module RibbonScene =
             match transform with
             | Some t -> sg |> Sg.trafo' t
             | None   -> sg
-
-    /// Adaptive version: rebuilds the scene graph whenever any reactive value
-    /// changes. 
-    let buildAdaptive
-            (mode        : aval<ExtrusionMode>)
-            (points      : aval<V3d[]>)
-            (halfWidth   : aval<float>)
-            (showPolyline: aval<bool>)
-            (showNormals : aval<bool>)
-            (transform   : aval<Trafo3d option>)
-            : aval<ISg> =
-        adaptive {
-            let! m   = mode
-            let! pts = points
-            let! hw  = halfWidth
-            let! sp  = showPolyline
-            let! sn  = showNormals
-            let! t   = transform
-            return
-                build
-                    { RibbonState.defaultState with
-                        extrusionMode  = m
-                        polylinePoints = pts
-                        halfWidth      = hw
-                        showPolyline   = sp
-                        showNormals    = sn }
-                    t
-        }

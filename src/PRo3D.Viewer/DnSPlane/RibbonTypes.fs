@@ -16,12 +16,13 @@ type ExtrusionMode =
 /// Runtime state for a single ribbon overlay on the OPC viewer.
 type RibbonState =
     {
+        allPolylines     : V3d[][] 
+        selectedIndex    : int
         cameraState    : CameraControllerState
         halfWidth      : float
         showPolyline   : bool
         showNormals    : bool
         extrusionMode  : ExtrusionMode
-        polylinePoints : V3d[]
         importPath     : string
         importError    : string
         normalWindowSize : int
@@ -33,8 +34,9 @@ module RibbonState =
 
     let defaultState =
         {
+            allPolylines     = [||]
+            selectedIndex    = 0
             cameraState    = { FreeFlyController.initial with view = initialView }
-            polylinePoints = [||]
             halfWidth      = 2.0
             extrusionMode  = Basic
             showPolyline   = true
@@ -43,6 +45,10 @@ module RibbonState =
             importError    = ""
             normalWindowSize = 4
         }
+
+    let currentPoints (s : RibbonState) =
+        if s.allPolylines.Length = 0 then [||]
+        else s.allPolylines.[s.selectedIndex % s.allPolylines.Length]
 
 type RibbonMessage =
     | Camera           of FreeFlyController.Message

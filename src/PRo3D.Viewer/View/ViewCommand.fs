@@ -304,16 +304,19 @@ module ViewCommand =
                     | Some "RMF"          -> RMF
                     | _                   -> Basic
                 let halfWidth = ribbonCfg.HalfWidth |> Option.defaultValue 2.0
-                match PRo3D.Viewer.Ribbon.GeoJson.tryParseLineString ribbonCfg.GeoJson with
+                match PRo3D.Viewer.Ribbon.GeoJson.tryParseAllLineStrings ribbonCfg.GeoJson with
                 | Result.Error err ->
+                    printfn "[RIBBON ERROR] %s" err
                     RibbonState.defaultState
-                | Result.Ok pts ->
-                    let localPts = pts //|> Array.map (fun p -> opcTransform.Backward.TransformPos(p))
+                | Result.Ok features ->
+                    let allPolylines =
+                        features |> Array.map (fun (_, pts) -> pts) 
                     { RibbonState.defaultState with
-                        polylinePoints = localPts
-                        halfWidth      = halfWidth
-                        extrusionMode  = mode
-                        showPolyline   = true }
+                        allPolylines  = allPolylines
+                        selectedIndex = 0
+                        halfWidth     = halfWidth
+                        extrusionMode = mode
+                        showPolyline  = true }
 
         let patchTrafos =
             layerInfosWithTrafos |> List.map snd
