@@ -292,9 +292,9 @@ module ViewCommand =
         // Parse background color if provided
         let backgroundColor = parseBackgroundColor config.BackgroundColor
 
-        let ribbonSg =
+        let ribbonState =
             match config.Ribbon with
-            | None -> Sg.empty
+            | None -> RibbonState.defaultState
             | Some ribbonCfg ->
                 let mode =
                     match ribbonCfg.Mode with
@@ -306,17 +306,14 @@ module ViewCommand =
                 let halfWidth = ribbonCfg.HalfWidth |> Option.defaultValue 2.0
                 match PRo3D.Viewer.Ribbon.GeoJson.tryParseLineString ribbonCfg.GeoJson with
                 | Result.Error err ->
-                    printfn "[RIBBON ERROR] %s" err
-                    Sg.empty
+                    RibbonState.defaultState
                 | Result.Ok pts ->
                     let localPts = pts //|> Array.map (fun p -> opcTransform.Backward.TransformPos(p))
-                    RibbonScene.build
-                        { RibbonState.defaultState with
-                            polylinePoints = localPts
-                            halfWidth      = halfWidth
-                            extrusionMode  = mode
-                            showPolyline   = true }
-                        None
+                    { RibbonState.defaultState with
+                        polylinePoints = localPts
+                        halfWidth      = halfWidth
+                        extrusionMode  = mode
+                        showPolyline   = true }
 
         let patchTrafos =
             layerInfosWithTrafos |> List.map snd
@@ -326,7 +323,7 @@ module ViewCommand =
             mode = ViewerMode.ViewMode {
                 objSceneGraphs = objScene
                 enablePicking = true
-                ribbonSg       = ribbonSg
+                initialRibbonState = ribbonState
                 patchTrafos    = patchTrafos
             }
             scene = opcScene

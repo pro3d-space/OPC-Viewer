@@ -201,10 +201,9 @@ module RibbonScene =
             (state     : RibbonState)
             (transform : Trafo3d option)
             : ISg =
-        if state.polylinePoints.Length < 2 then
-            Sg.empty
+        if state.polylinePoints.Length < 2 then Sg.ofList []
         else
-            let normals  = RibbonAlgorithms.computeNormals V3d.ZAxis state.polylinePoints
+            let normals = RibbonAlgorithms.computeNormals V3d.ZAxis state.normalWindowSize state.polylinePoints
             let cps      = Array.zip state.polylinePoints normals
 
             let parts =

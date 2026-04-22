@@ -34,7 +34,7 @@ and ViewModeConfig = {
     objSceneGraphs : ISg list
     /// Enable object picking and cursor
     enablePicking : bool
-    ribbonSg       : ISg 
+    initialRibbonState : RibbonState 
     patchTrafos    : Trafo3d list
 }
 
@@ -381,11 +381,41 @@ module UnifiedViewer =
                     }
                     |> Sg.onOff isOrbitMode
 
+                let ribbonState = cval viewConfig.initialRibbonState
+
+                let ribbonScene =
+                    ribbonState |> AVal.map (fun s ->
+                        RibbonScene.build s None :> ISg)
+                    |> Sg.dynamic
+
+                let modifyRibbon f =
+                    transact (fun _ -> ribbonState.Value <- f ribbonState.Value)
+
+                let allModes = [| Basic; Stabilized; FrenetSerret; Bishop; RMF |]
+
+                win.Keyboard.KeyDown(Keys.OemPlus).Values.Add(fun _ ->
+                    modifyRibbon (fun s -> { s with halfWidth = min 500.0 (s.halfWidth * 1.25) })
+                )
+                win.Keyboard.KeyDown(Keys.OemMinus).Values.Add(fun _ ->
+                    modifyRibbon (fun s -> { s with halfWidth = max 0.1 (s.halfWidth / 1.25) })
+                )
+                win.Keyboard.KeyDown(Keys.G).Values.Add(fun _ ->
+                    modifyRibbon (fun s ->
+                        let idx = allModes |> Array.findIndex (fun m -> m = s.extrusionMode)
+                        { s with extrusionMode = allModes.[(idx + 1) % allModes.Length] })
+                )
+                win.Keyboard.KeyDown(Keys.Down).Values.Add(fun _ ->
+                    modifyRibbon (fun s -> { s with normalWindowSize = max 3 (s.normalWindowSize - 1) })
+                )
+                win.Keyboard.KeyDown(Keys.Up).Values.Add(fun _ ->
+                    modifyRibbon (fun s -> { s with normalWindowSize = min 20 (s.normalWindowSize + 1) })
+                )
+
                 // Separate geometry (affected by wireframe) from overlays (always solid)
                 let geometryScene =
                     opcSceneWithShaders
                     |> Sg.andAlso objSceneWithShaders
-                    |> Sg.andAlso viewConfig.ribbonSg
+                    |> Sg.andAlso ribbonScene
                     |> Sg.viewTrafo (view |> AVal.map CameraView.viewTrafo)
                     |> Sg.projTrafo (frustum |> AVal.map Frustum.projTrafo)
                     |> Sg.fillMode fillMode

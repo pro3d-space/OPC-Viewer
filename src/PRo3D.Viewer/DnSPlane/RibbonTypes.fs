@@ -24,6 +24,7 @@ type RibbonState =
         polylinePoints : V3d[]
         importPath     : string
         importError    : string
+        normalWindowSize : int
     }
 
 module RibbonState =
@@ -40,6 +41,7 @@ module RibbonState =
             showNormals    = false
             importPath     = ""
             importError    = ""
+            normalWindowSize = 4
         }
 
 type RibbonMessage =

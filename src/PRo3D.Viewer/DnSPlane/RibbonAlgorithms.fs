@@ -270,19 +270,20 @@ module RibbonAlgorithms =
     /// (clamped to array bounds, always at least 3 points).
     /// Uses LinearRegression3d; falls back to a zero plane on failure.
     /// The returned normal is oriented toward 'up'.
-    let computeNormals (up : V3d) (points : V3d[]) : V3d[] =
+    let computeNormals (up : V3d) (slidingWindow : int) (points : V3d[]) : V3d[] =
         let n = points.Length
         Array.init n (fun i ->
-            let hi     = min (n - 1) (i + 2)
-            let lo     = max 0 (min (i - 1) (hi - 2))
+            let hi     = min (n - 1) (i + slidingWindow)
+            let lo     = max 0 (min (i - 1) (hi - slidingWindow))
             let window = points.[lo .. hi]
 
-            let plane =
+            let normal =
                 if window.Length >= 3 then
                     match LinearRegression3d(window).TryGetRegressionInfo() with
-                    | Some lr -> lr.Plane
-                    | None    -> Plane3d()
+                    | Some lr when lr.Plane.Normal.Length > 1e-6 -> lr.Plane.Normal
+                    | _ -> up   
                 else
-                    Plane3d()
+                    up          
 
-            if Vec.dot plane.Normal up < 0.0 then -plane.Normal else plane.Normal)
+            if Vec.dot normal up < 0.0 then -normal else normal
+        )
