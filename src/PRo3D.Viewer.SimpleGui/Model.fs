@@ -1,0 +1,34 @@
+namespace PRo3D.Viewer.SimpleGui
+
+open Aardvark.Base
+open Aardvark.Rendering
+open Aardvark.UI.Primitives
+open Adaptify
+
+/// State after a folder was successfully loaded:
+/// the root-node bounding box and the absolute paths of every
+/// patchhierarchy.xml directory (i.e. the OPCs to render).
+type LoadedScene = {
+    RootDirectory   : string
+    HierarchyPaths  : list<string>
+    BoundingBox     : Box3d
+    Sky             : V3d
+}
+
+[<ModelType>]
+type Model = {
+    /// Currently loaded scene. None until the user picked a folder.
+    loaded            : Option<LoadedScene>
+    /// Camera state (free-fly).
+    cameraState       : CameraControllerState
+    /// Frustum near/far derived from the bounding box.
+    near              : float
+    far               : float
+    /// UI toggles, mirroring TestViewer.fs key bindings.
+    useSecondary      : bool
+    secondaryOpacity  : float
+    lodVisEnabled     : bool
+    fillMode          : FillMode
+    /// Banner / error message displayed in the UI.
+    statusMessage     : string
+}

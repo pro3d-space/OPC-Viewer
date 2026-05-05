@@ -2,6 +2,10 @@ STORAGE: NONE
 RESTRICTION: == net8.0
 NUGET
   remote: https://api.nuget.org/v3/index.json
+    Aardium (2.1.2)
+      Aardvark.Base (>= 5.3 < 5.4)
+      FSharp.Core (>= 8.0)
+      FSys (>= 0.0.1 < 0.1)
     Aardvark.Application (5.5.17)
       Aardvark.Base.Essentials (>= 5.3.10 < 5.4)
       Aardvark.Base.Incremental (>= 5.3.10 < 5.4)
@@ -296,6 +300,8 @@ NUGET
       FSharp.Core (>= 4.3.2)
       FsPickler (>= 5.3.2)
       Newtonsoft.Json (>= 10.0.1)
+    FSys (0.0.1)
+      FSharp.Core (>= 4.7)
     FuzzySharp (2.0.2)
     GLSLangSharp (0.4.15)
       FSharp.Core (>= 5.0)

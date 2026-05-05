@@ -9,6 +9,7 @@
 .vs
 /Aardvark.log
 /tmp/
+/test-output/
 /src/PRo3D.Viewer/*.user
 /screenshots
 ai/datawrangling/candidates/cache/
