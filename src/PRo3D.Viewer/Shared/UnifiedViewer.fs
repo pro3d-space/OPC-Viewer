@@ -343,11 +343,32 @@ module UnifiedViewer =
                         else sg |> Sg.trafo' trafo :> ISg
                     )
 
+                let opcVisibility =
+                    hierarchies |> List.map (fun _ -> cval true)
+
+                // H key: cycle visibility — hides one OPC at a time, wraps around
+                let mutable hideIndex = -1
+                win.Keyboard.KeyDown(Keys.H).Values.Add(fun _ ->
+                    let n = opcVisibility.Length
+                    if n > 0 then
+                        // Show all first
+                        opcVisibility |> List.iter (fun v -> transact (fun _ -> v.Value <- true))
+                        // Then hide the next one
+                        hideIndex <- (hideIndex + 1) % (n + 1)  // +1 so last step shows all
+                        if hideIndex < n then
+                            transact (fun _ -> opcVisibility.[hideIndex].Value <- false)
+                            printfn "[OPC] hiding OPC %d / %d" (hideIndex + 1) n
+                        else
+                            printfn "[OPC] all OPCs visible"
+                )
+
                 let cursorPos = AVal.init V3d.Zero
               
                 // Apply shaders to OPC scene
                 let opcSceneWithShaders =
-                    Sg.ofList hierarchies
+                    List.zip hierarchies opcVisibility
+                    |> List.map (fun (sg, vis) -> sg |> Sg.onOff vis)
+                    |> Sg.ofList
                     |> Sg.shader {
                         do! stableTrafo
                         do! DefaultSurfaces.constantColor C4f.White

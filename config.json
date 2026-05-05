@@ -1,0 +1,12 @@
+{
+  "command": "view",
+  "data": [
+    { "path": "", "type": "opc" },
+    { "path": "", "type": "opc" }],
+  "ribbon": {
+    "geojson": "",
+    "halfWidth": 0.5,
+    "mode": "Stabilized"
+  }
+}
+

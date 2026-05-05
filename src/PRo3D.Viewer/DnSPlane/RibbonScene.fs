@@ -88,17 +88,21 @@ module RibbonScene =
 
     /// Orange ribbon mesh, extruded on the GPU via RibbonShaders.extrude.
     let private ribbonSg
+            (up         : V3d)
             (mode       : ExtrusionMode)
             (controlPts : (V3d * V3d)[])
             (halfWidth  : float)
             : ISg =
         let centers, dipVecsArr, sides, indices =
-            RibbonAlgorithms.buildSurface mode controlPts
+            RibbonAlgorithms.buildSurface up mode controlPts
         let n = controlPts.Length
 
+        let tangents = RibbonAlgorithms.computeTangents (controlPts |> Array.map fst)
         let vertNormals =
             Array.init (2 * n) (fun i ->
-                (controlPts.[i / 2] |> snd).Normalized |> V3f)
+                let d = dipVecsArr.[i / 2]
+                let t = tangents.[i / 2]
+                Vec.cross d t |> Vec.normalize |> V3f)
 
         IndexedGeometry(
             Mode       = IndexedGeometryMode.TriangleList,
@@ -115,9 +119,7 @@ module RibbonScene =
         |> Sg.uniform "HalfWidth" (AVal.constant halfWidth)
         |> Sg.shader {
             do! RibbonShaders.extrude
-            do! DefaultSurfaces.trafo
             do! DefaultSurfaces.constantColor (C4f(0.80f, 0.55f, 0.28f, 1.0f))
-            do! DefaultSurfaces.simpleLighting
             do! SharedShaders.noPick
         }
         |> Sg.cullMode' CullMode.None
@@ -163,19 +165,18 @@ module RibbonScene =
     /// Build the scene graph for the currently selected polyline in RibbonState.
     let build (state : RibbonState) (transform : Trafo3d option) : ISg =
         let pts = RibbonState.currentPoints state
-        if pts.Length < 2 then
-            Sg.ofList []
+        if pts.Length < 2 then Sg.ofList []
         else
-            let normals = RibbonAlgorithms.computeNormals V3d.ZAxis state.normalWindowSize pts
+            let up      = V3d.ZAxis   // or pass from config/sky if needed
+            let normals = RibbonAlgorithms.computeNormals up state.normalWindowSize pts
             let cps     = Array.zip pts normals
 
             let parts =
-                [ yield ribbonSg state.extrusionMode cps state.halfWidth
+                [ yield ribbonSg up state.extrusionMode cps state.halfWidth
                   if state.showPolyline then yield polylineSg cps
                   if state.showNormals  then yield normalsSg  cps 2.0 ]
 
             let sg = Sg.ofList parts
-
             match transform with
             | Some t -> sg |> Sg.trafo' t
             | None   -> sg

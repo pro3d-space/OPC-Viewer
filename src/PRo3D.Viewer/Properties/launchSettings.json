@@ -14,6 +14,14 @@
     "View": {
       "commandName": "Project",
       "commandLineArgs": "view \"C:\\pro3ddata\\VictoriaCrater\\HiRISE_VictoriaCrater\"\r\n"
+    },
+    "victoria": {
+      "commandName": "Project",
+      "commandLineArgs": "view http://download.vrvis.at/acquisition/32987e2792e0/PRo3D/VictoriaCrater.zip"
+    },
+    "project with ribbon": {
+      "commandName": "Project",
+      "commandLineArgs": "project C:/Users/pichler/Documents/Code/PRo3D/OPC-Viewer_H1/OPC-Viewer/config.json"
     }
   }
 }
