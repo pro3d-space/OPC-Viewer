@@ -5,8 +5,7 @@
     { "path": "", "type": "opc" }],
   "ribbon": {
     "geojson": "",
-    "halfWidth": 0.5,
-    "mode": "Stabilized"
+    "halfWidth": 0.5
   }
 }
 

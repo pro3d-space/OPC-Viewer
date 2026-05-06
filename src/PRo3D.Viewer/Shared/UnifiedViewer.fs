@@ -412,24 +412,17 @@ module UnifiedViewer =
                 let modifyRibbon f =
                     transact (fun _ -> ribbonState.Value <- f ribbonState.Value)
 
-                let allModes = [| Basic; Stabilized; FrenetSerret; Bishop; RMF |]
-
                 win.Keyboard.KeyDown(Keys.OemPlus).Values.Add(fun _ ->
                     modifyRibbon (fun s -> { s with halfWidth = min 500.0 (s.halfWidth * 1.25) })
                 )
                 win.Keyboard.KeyDown(Keys.OemMinus).Values.Add(fun _ ->
                     modifyRibbon (fun s -> { s with halfWidth = max 0.1 (s.halfWidth / 1.25) })
                 )
-                win.Keyboard.KeyDown(Keys.G).Values.Add(fun _ ->
-                    modifyRibbon (fun s ->
-                        let idx = allModes |> Array.findIndex (fun m -> m = s.extrusionMode)
-                        { s with extrusionMode = allModes.[(idx + 1) % allModes.Length] })
-                )
                 win.Keyboard.KeyDown(Keys.Down).Values.Add(fun _ ->
-                    modifyRibbon (fun s -> { s with normalWindowSize = max 3 (s.normalWindowSize - 1) })
+                    modifyRibbon (fun s -> { s with neighborCount = max 0 (s.neighborCount - 1); useAllPoints = false })
                 )
                 win.Keyboard.KeyDown(Keys.Up).Values.Add(fun _ ->
-                    modifyRibbon (fun s -> { s with normalWindowSize = min 20 (s.normalWindowSize + 1) })
+                    modifyRibbon (fun s -> { s with neighborCount = s.neighborCount + 1; useAllPoints = false })
                 )
                 win.Keyboard.KeyDown(Keys.Left).Values.Add(fun _ ->
                     modifyRibbon (fun s ->

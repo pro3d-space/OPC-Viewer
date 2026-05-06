@@ -84,81 +84,93 @@ module GeoJson =
 /// Scene graph builders.
 module RibbonScene =
 
+    /// Up vector used for the strike/dip computation. Y is up in this scene.
+    let private up = V3d.YAxis
+
     // ── private helpers ───────────────────────────────────────────────────────
 
     /// Orange ribbon mesh, extruded on the GPU via RibbonShaders.extrude.
+    /// One independent quad per polyline segment.
     let private ribbonSg
-            (up         : V3d)
-            (mode       : ExtrusionMode)
-            (controlPts : (V3d * V3d)[])
-            (halfWidth  : float)
+            (frames    : RibbonAlgorithms.SegmentFrame[])
+            (halfWidth : float)
             : ISg =
-        let centers, dipVecsArr, sides, indices =
-            RibbonAlgorithms.buildSurface up mode controlPts
-        let n = controlPts.Length
+        if frames.Length = 0 then Sg.ofList []
+        else
+            let centers, dipVecs, sides, indices =
+                RibbonAlgorithms.buildRibbonMesh frames
 
-        let tangents = RibbonAlgorithms.computeTangents (controlPts |> Array.map fst)
-        let vertNormals =
-            Array.init (2 * n) (fun i ->
-                let d = dipVecsArr.[i / 2]
-                let t = tangents.[i / 2]
-                Vec.cross d t |> Vec.normalize |> V3f)
+            // Per-vertex shading normal: in the plane spanned by dip and the
+            // segment's tangent, perpendicular to both — i.e. the geometric
+            // normal of the extruded quad.
+            let normals =
+                Array.init centers.Length (fun v ->
+                    let s     = v / 4         // segment index (4 verts per segment)
+                    let f     = frames.[s]
+                    let tan   = (f.p1 - f.p0).Normalized
+                    Vec.cross f.dip tan |> Vec.normalize |> V3f)
 
-        IndexedGeometry(
-            Mode       = IndexedGeometryMode.TriangleList,
-            IndexArray = (indices :> System.Array),
-            IndexedAttributes =
-                SymDict.ofList [
-                    DefaultSemantic.Positions, centers    |> Array.map V3f :> System.Array
-                    DefaultSemantic.Normals,   vertNormals                  :> System.Array
-                    Sym.ofString "DipVec",     dipVecsArr |> Array.map V3f :> System.Array
-                    Sym.ofString "Side",       sides                        :> System.Array
-                ]
-        )
-        |> Sg.ofIndexedGeometry
-        |> Sg.uniform "HalfWidth" (AVal.constant halfWidth)
-        |> Sg.shader {
-            do! RibbonShaders.extrude
-            do! DefaultSurfaces.constantColor (C4f(0.80f, 0.55f, 0.28f, 1.0f))
-            do! SharedShaders.noPick
-        }
-        |> Sg.cullMode' CullMode.None
+            IndexedGeometry(
+                Mode       = IndexedGeometryMode.TriangleList,
+                IndexArray = (indices :> System.Array),
+                IndexedAttributes =
+                    SymDict.ofList [
+                        DefaultSemantic.Positions, centers |> Array.map V3f :> System.Array
+                        DefaultSemantic.Normals,   normals                  :> System.Array
+                        Sym.ofString "DipVec",     dipVecs |> Array.map V3f :> System.Array
+                        Sym.ofString "Side",       sides                    :> System.Array
+                    ]
+            )
+            |> Sg.ofIndexedGeometry
+            |> Sg.uniform "HalfWidth" (AVal.constant halfWidth)
+            |> Sg.shader {
+                do! RibbonShaders.extrude
+                do! DefaultSurfaces.constantColor (C4f(0.80f, 0.55f, 0.28f, 1.0f))
+                do! SharedShaders.noPick
+            }
+            |> Sg.cullMode' CullMode.None
 
     /// Red polyline along the control points.
-    let private polylineSg (controlPts : (V3d * V3d)[]) : ISg =
-        let pts = controlPts |> Array.map (fst >> V3f)
-        let lineVerts =
-            Array.init ((controlPts.Length - 1) * 2) (fun i ->
-                if i % 2 = 0 then pts.[i / 2] else pts.[i / 2 + 1])
-        IndexedGeometry(
-            Mode = IndexedGeometryMode.LineList,
-            IndexedAttributes =
-                SymDict.ofList [ DefaultSemantic.Positions, lineVerts :> System.Array ]
-        )
-        |> Sg.ofIndexedGeometry
-        |> Sg.shader {
-            do! DefaultSurfaces.trafo
-            do! DefaultSurfaces.constantColor C4f.Red
-            do! SharedShaders.noPick
-        }
+    let private polylineSg (points : V3d[]) : ISg =
+        if points.Length < 2 then Sg.ofList []
+        else
+            let lineVerts =
+                Array.init ((points.Length - 1) * 2) (fun i ->
+                    if i % 2 = 0 then V3f points.[i / 2]
+                    else              V3f points.[i / 2 + 1])
+            IndexedGeometry(
+                Mode = IndexedGeometryMode.LineList,
+                IndexedAttributes =
+                    SymDict.ofList [ DefaultSemantic.Positions, lineVerts :> System.Array ]
+            )
+            |> Sg.ofIndexedGeometry
+            |> Sg.shader {
+                do! DefaultSurfaces.trafo
+                do! DefaultSurfaces.constantColor C4f.Red
+                do! SharedShaders.noPick
+            }
 
-    /// Blue normal stubs at each control point.
-    let private normalsSg (controlPts : (V3d * V3d)[]) (scale : float) : ISg =
-        let lineVerts =
-            controlPts
-            |> Array.collect (fun (pos, n) ->
-                [| V3f pos; V3f(pos + n.Normalized * scale) |])
-        IndexedGeometry(
-            Mode = IndexedGeometryMode.LineList,
-            IndexedAttributes =
-                SymDict.ofList [ DefaultSemantic.Positions, lineVerts :> System.Array ]
-        )
-        |> Sg.ofIndexedGeometry
-        |> Sg.shader {
-            do! DefaultSurfaces.trafo
-            do! DefaultSurfaces.constantColor C4f.Blue
-            do! SharedShaders.noPick
-        }
+    /// Cyan strike-direction arrows, one at the midpoint of each segment.
+    let private strikeArrowsSg
+            (frames      : RibbonAlgorithms.SegmentFrame[])
+            (arrowLength : float)
+            : ISg =
+        if frames.Length = 0 then Sg.ofList []
+        else
+            let lineVerts =
+                RibbonAlgorithms.buildStrikeArrowLines arrowLength frames
+                |> Array.map V3f
+            IndexedGeometry(
+                Mode = IndexedGeometryMode.LineList,
+                IndexedAttributes =
+                    SymDict.ofList [ DefaultSemantic.Positions, lineVerts :> System.Array ]
+            )
+            |> Sg.ofIndexedGeometry
+            |> Sg.shader {
+                do! DefaultSurfaces.trafo
+                do! DefaultSurfaces.constantColor C4f.Cyan
+                do! SharedShaders.noPick
+            }
 
     // ── public API ────────────────────────────────────────────────────────────
 
@@ -167,14 +179,18 @@ module RibbonScene =
         let pts = RibbonState.currentPoints state
         if pts.Length < 2 then Sg.ofList []
         else
-            let up      = V3d.ZAxis   // or pass from config/sky if needed
-            let normals = RibbonAlgorithms.computeNormals up state.normalWindowSize pts
-            let cps     = Array.zip pts normals
+            let frames =
+                RibbonAlgorithms.computeSegmentFrames
+                    up state.useAllPoints state.neighborCount pts
+
+            // Make the strike arrow scale with the ribbon's extrusion length so
+            // the visualisation stays balanced as the user adjusts +/-.
+            let arrowLength = max 0.5 (state.halfWidth * 0.8)
 
             let parts =
-                [ yield ribbonSg up state.extrusionMode cps state.halfWidth
-                  if state.showPolyline then yield polylineSg cps
-                  if state.showNormals  then yield normalsSg  cps 2.0 ]
+                [ yield ribbonSg frames state.halfWidth
+                  if state.showPolyline     then yield polylineSg     pts
+                  if state.showStrikeArrows then yield strikeArrowsSg frames arrowLength ]
 
             let sg = Sg.ofList parts
             match transform with

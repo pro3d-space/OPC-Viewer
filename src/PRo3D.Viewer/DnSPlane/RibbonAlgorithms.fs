@@ -3,279 +3,247 @@ namespace PRo3D.Viewer.Ribbon
 open Aardvark.Base
 open Aardvark.Geometry
 
-/// Pure geometry algorithms for building ribbon mesh data.
-/// All functions return (centerPositions, dipVecs, sides, indices) ready
-/// for upload to the GPU.  The vertex shader does the actual extrusion:
+/// Pure geometry algorithms for building the ribbon mesh data.
+///
+/// One algorithm only: per-segment dip-and-strike extrusion.
+///
+/// For each segment of the polyline (the line between two consecutive
+/// vertices P_i and P_{i+1}) we
+///   1. collect a window of nearby polyline points,
+///   2. fit a plane through that window with LinearRegression3d,
+///   3. derive the geological strike and dip vectors using up = Y:
+///         strike = up × planeNormal
+///         dip    = strike × planeNormal
+///   4. emit a quad (P_i, P_{i+1}) extruded ±halfWidth along the dip vector,
+///   5. emit a small arrow at the segment midpoint pointing along strike.
+///
+/// The vertex shader does the actual extrusion:
 ///   worldPos = centerPos + side * halfWidth * dipVec
+/// so changing halfWidth at runtime only requires updating the uniform.
 module RibbonAlgorithms =
 
-    // ── Shared helpers ────────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /// Central-difference tangents (forward/backward at the ends).
-    let computeTangents (positions : V3d[]) : V3d[] =
-        let n = positions.Length
-        Array.init n (fun i ->
-            let raw =
-                if   i = 0   then positions.[1]     - positions.[0]
-                elif i = n-1 then positions.[n-1]   - positions.[n-2]
-                else              positions.[i+1]   - positions.[i-1]
-            raw.Normalized)
+    /// Return -1 if the plane normal points away from `up`, +1 otherwise.
+    /// Used to flip the plane normal so it always points roughly "upward",
+    /// which makes the strike/dip cross products produce a stable orientation.
+    let private signedOrientation (up : V3d) (plane : Plane3d) : int =
+        if Vec.dot plane.Normal up < 0.0 then -1 else 1
 
-    /// Build the GPU-ready mesh arrays from per-vertex center positions and dip vectors.
-    /// Vertex layout interleaves left/right: [L₀, R₀, L₁, R₁, …]
-    /// The shader extrudes: worldPos = centerPos + side * halfWidth * dipVec.
-    let assembleMesh
-            (positions : V3d[])
-            (dipVecs   : V3d[])
-            : V3d[] * V3d[] * float32[] * int[] =
-        let n            = positions.Length
-        let centerVerts  = Array.init (2 * n) (fun i -> positions.[i / 2])
-        let expandedDips = Array.init (2 * n) (fun i -> dipVecs.[i / 2])
-        let sides        = Array.init (2 * n) (fun i -> if i % 2 = 0 then -1.0f else 1.0f)
-        let indices =
-            Array.init ((n - 1) * 6) (fun k ->
-                let seg = k / 6
-                let li  = 2 * seg
-                let ri  = 2 * seg + 1
-                let li1 = 2 * seg + 2
-                let ri1 = 2 * seg + 3
-                match k % 6 with
-                | 0 -> li  | 1 -> ri1 | 2 -> li1
-                | 3 -> li  | 4 -> ri  | _ -> ri1)
-        centerVerts, expandedDips, sides, indices
-
-    // ── Normal estimation ─────────────────────────────────────────────────────
-
-    /// For each vertex i, fit a plane through a sliding window of 'windowSize' points.
-    /// Returns the plane normal oriented toward 'up'.
-    let computeNormals (up : V3d) (slidingWindow : int) (points : V3d[]) : V3d[] =
-        let n = points.Length
-        Array.init n (fun i ->
-            let hi     = min (n - 1) (i + slidingWindow)
-            let lo     = max 0 (min (i - 1) (hi - slidingWindow))
-            let window = points.[lo .. hi]
-
-            let normal =
-                if window.Length >= 3 then
-                    match LinearRegression3d(window).TryGetRegressionInfo() with
-                    | Some lr when lr.Plane.Normal.Length > 1e-6 -> lr.Plane.Normal
-                    | _ -> up
-                else
-                    up
-
-            if Vec.dot normal up < 0.0 then -normal else normal
-        )
-
-    /// Compute the geological dip vector from a plane normal and up vector.
-    /// This matches the PRo3D definition:
-    ///   strike = up × planeNormal
-    ///   dip    = strike × planeNormal
-    /// The dip vector lies within the geological plane, perpendicular to strike,
-    /// pointing in the direction of steepest descent.
-    let computeDipVec (up : V3d) (planeNormal : V3d) : V3d =
-        let eps = 1e-6
-        // Orient plane normal toward up
-        let nn = if Vec.dot planeNormal up < 0.0 then -planeNormal else planeNormal
-        // Strike: horizontal intersection of geological plane with horizontal plane
-        let strike = Vec.cross up nn
-        if strike.Length < eps then
-            // Plane is horizontal — dip is undefined, fall back to world X
-            V3d.XAxis
+    /// Standard deviation given a precomputed average. Two-pass; matches the
+    /// helper referenced in the original PRo3D snippet.
+    let private computeStandardDeviation (avg : float) (xs : float[]) : float =
+        if xs.Length = 0 then 0.0
         else
-            let strike = strike.Normalized
-            // Dip: steepest descent direction within the plane
-            Vec.cross strike nn |> Vec.normalize
+            let s =
+                xs
+                |> Array.sumBy (fun x -> let d = x - avg in d * d)
+            sqrt (s / float xs.Length)
 
-    // ── Mode 1: Basic ─────────────────────────────────────────────────────────
+    /// EVD-style plane fallback used when LinearRegression3d cannot fit a plane
+    /// (e.g. fewer than 3 distinct points or co-linear input). We just return
+    /// a plane passing through the centroid with the supplied up vector as its
+    /// normal — good enough to keep rendering until enough points are available.
+    let private fallbackPlane (up : V3d) (points : V3d[]) : Plane3d =
+        let centroid =
+            if points.Length = 0 then V3d.Zero
+            else (points |> Array.fold (+) V3d.Zero) / float points.Length
+        Plane3d(up.Normalized, centroid)
 
-    /// Geological dip/strike surface.
-    /// dipVec = strike × planeNormal, where strike = up × planeNormal.
-    /// The tangent along the polyline is NOT used — dip is purely geometric.
-    let buildDipStrikeSurface
-            (up            : V3d)
-            (controlPoints : (V3d * V3d)[])
-            : V3d[] * V3d[] * float32[] * int[] =
-        if controlPoints.Length < 2 then [||], [||], [||], [||]
-        else
-        let positions = controlPoints |> Array.map fst
-        let normals   = controlPoints |> Array.map (snd >> Vec.normalize)
-
-        let dipVecs =
-            Array.init controlPoints.Length (fun i ->
-                computeDipVec up normals.[i])
-
-        assembleMesh positions dipVecs
-
-    // ── Mode 2: Stabilized ───────────────────────────────────────────────────
-
-    /// Same as Basic but applies a sign-continuity pass to prevent the dipVec
-    /// from flipping when the plane normal varies along the polyline.
-    let buildStabilizedSurface
-            (up            : V3d)
-            (controlPoints : (V3d * V3d)[])
-            : V3d[] * V3d[] * float32[] * int[] =
-        if controlPoints.Length < 2 then [||], [||], [||], [||]
-        else
-        let positions = controlPoints |> Array.map fst
-        let normals   = controlPoints |> Array.map (snd >> Vec.normalize)
-
-        let dipVecs =
-            Array.init controlPoints.Length (fun i ->
-                computeDipVec up normals.[i])
-
-        // Sign-continuity pass: flip if consecutive dipVecs point opposite ways
-        for i in 1 .. dipVecs.Length - 1 do
-            if Vec.dot dipVecs.[i] dipVecs.[i-1] < 0.0 then
-                dipVecs.[i] <- -dipVecs.[i]
-
-        assembleMesh positions dipVecs
-
-    // ── Mode 3: Frenet-Serret with torsion compensation ──────────────────────
-
-    /// Uses the Frenet binormal B = normalize(T × dT/ds) as the extrusion direction.
-    /// Sign continuity is enforced to prevent spinning at inflection points.
-    let buildFrenetSerretSurface
-            (controlPoints : (V3d * V3d)[])
-            : V3d[] * V3d[] * float32[] * int[] =
-        if controlPoints.Length < 2 then [||], [||], [||], [||]
-        else
-        let n         = controlPoints.Length
-        let positions = controlPoints |> Array.map fst
-        let tangents  = computeTangents positions
-        let eps       = 1e-6
-
-        let t0    = tangents.[0]
-        let seed0 =
-            let seed = if abs (Vec.dot t0 V3d.ZAxis) < 0.9 then V3d.ZAxis else V3d.YAxis
-            let proj = seed - t0 * Vec.dot seed t0
-            if proj.Length < eps then V3d.YAxis else proj.Normalized
-
-        let frenetB (i : int) (fallback : V3d) : V3d =
-            let t  = tangents.[i]
-            let dT =
-                if i = 0     then tangents.[1]     - tangents.[0]
-                elif i = n-1 then tangents.[n-1]   - tangents.[n-2]
-                else              tangents.[i+1]   - tangents.[i-1]
-            if dT.Length < eps then
-                let proj = fallback - t * Vec.dot fallback t
-                if proj.Length < eps then fallback else proj.Normalized
+    /// Fit a plane through `points` using LinearRegression3d, fall back to an
+    /// up-aligned plane on failure. Logs the residuals (avg / max / min / std /
+    /// sum-of-squares), exactly matching the original PRo3D snippet.
+    let private fitPlane (up : V3d) (points : V3d[]) : Plane3d =
+        let linRegression =
+            if points.Length >= 3 then
+                LinearRegression3d(points).TryGetRegressionInfo()
             else
-                let cross = Vec.cross t dT.Normalized
-                if cross.Length < eps then
-                    let proj = fallback - t * Vec.dot fallback t
-                    if proj.Length < eps then fallback else proj.Normalized
-                else cross.Normalized
+                None
 
-        let dipVecs   = Array.zeroCreate n
-        let mutable lastB = frenetB 0 seed0
-        dipVecs.[0] <- lastB
+        Log.line "[RibbonAlgorithms] %A" linRegression
 
-        for i in 1 .. n-1 do
-            let b  = frenetB i lastB
-            let bc = if Vec.dot b lastB < 0.0 then -b else b
-            dipVecs.[i] <- bc
-            lastB       <- bc
+        let plane =
+            match linRegression with
+            | Some lr -> lr.Plane
+            | None ->
+                Log.line "[dns computation] linear regression failed, fallback to evd"
+                fallbackPlane up points
 
-        assembleMesh positions dipVecs
+        if points.Length > 0 then
+            let distances = points |> Array.map (fun x -> (plane.Height x) |> abs)
+            let sos = distances |> Array.map (fun x -> x * x) |> Array.sum
+            let avg = distances |> Array.average
+            let mx  = distances |> Array.max
+            let mn  = distances |> Array.min
+            let std = distances |> computeStandardDeviation avg
+            Log.line
+                "[dipandStrike]: avg %f; max %f; min %f; std: %f; sols: %f"
+                avg mx mn std sos
 
-    // ── Mode 4: Bishop Frame (parallel transport) ────────────────────────────
+        plane
 
-    /// Initialises one perpendicular frame vector and parallel-transports it
-    /// along the curve by projecting out the new tangent component at each step.
-    let buildBishopSurface
-            (controlPoints : (V3d * V3d)[])
-            : V3d[] * V3d[] * float32[] * int[] =
-        if controlPoints.Length < 2 then [||], [||], [||], [||]
+    // ── Per-segment dip / strike ─────────────────────────────────────────────
+
+    /// Result of running the dip/strike fit for one polyline segment.
+    type SegmentFrame =
+        {
+            /// First polyline endpoint of the segment.
+            p0     : V3d
+            /// Second polyline endpoint of the segment.
+            p1     : V3d
+            /// In-plane direction of steepest descent (extrusion direction).
+            dip    : V3d
+            /// In-plane horizontal direction (visualised by the arrow).
+            strike : V3d
+        }
+
+    /// Pick the points that feed the regression for segment `i`.
+    /// `i` is the index of the segment, i.e. the segment goes from
+    /// `points.[i]` to `points.[i+1]`.
+    let private regressionWindow
+            (useAllPoints : bool)
+            (neighborCount : int)
+            (i : int)
+            (points : V3d[])
+            : V3d[] =
+        if useAllPoints then
+            points
         else
-        let n         = controlPoints.Length
-        let positions = controlPoints |> Array.map fst
-        let tangents  = computeTangents positions
-        let eps       = 1e-6
+            let n  = points.Length
+            let lo = max 0       (i     - neighborCount)
+            let hi = min (n - 1) (i + 1 + neighborCount)
+            points.[lo .. hi]
 
-        let t0   = tangents.[0]
-        let seed = if abs (Vec.dot t0 V3d.ZAxis) < 0.9 then V3d.ZAxis else V3d.YAxis
-        let u0   =
-            let proj = seed - t0 * Vec.dot seed t0
-            if proj.Length < eps then
-                let seed2 = if abs (Vec.dot t0 V3d.YAxis) < 0.9 then V3d.YAxis else V3d.XAxis
-                let proj2 = seed2 - t0 * Vec.dot seed2 t0
-                if proj2.Length < eps then seed2 else proj2.Normalized
-            else proj.Normalized
-
-        let dipVecs = Array.zeroCreate n
-        dipVecs.[0] <- u0
-
-        for i in 1 .. n-1 do
-            let t    = tangents.[i]
-            let prev = dipVecs.[i-1]
-            let proj = prev - t * Vec.dot prev t
-            dipVecs.[i] <- if proj.Length < eps then prev else proj.Normalized
-
-        assembleMesh positions dipVecs
-
-    // ── Mode 5: RMF – Rotation Minimizing Frame (double-reflection) ──────────
-
-    /// Wang et al. 2008: uses two successive reflections to propagate the frame
-    /// with minimal rotation per step.
-    let buildRMFSurface
-            (controlPoints : (V3d * V3d)[])
-            : V3d[] * V3d[] * float32[] * int[] =
-        if controlPoints.Length < 2 then [||], [||], [||], [||]
-        else
-        let n         = controlPoints.Length
-        let positions = controlPoints |> Array.map fst
-        let tangents  = computeTangents positions
-        let eps       = 1e-6
-
-        let t0   = tangents.[0]
-        let seed = if abs (Vec.dot t0 V3d.ZAxis) < 0.9 then V3d.ZAxis else V3d.YAxis
-        let u0   =
-            let proj = seed - t0 * Vec.dot seed t0
-            if proj.Length < eps then
-                let seed2 = if abs (Vec.dot t0 V3d.YAxis) < 0.9 then V3d.YAxis else V3d.XAxis
-                let proj2 = seed2 - t0 * Vec.dot seed2 t0
-                if proj2.Length < eps then seed2 else proj2.Normalized
-            else proj.Normalized
-
-        let dipVecs = Array.zeroCreate n
-        dipVecs.[0] <- u0
-
-        for i in 0 .. n-2 do
-            let r_i = dipVecs.[i]
-            let t_i = tangents.[i]
-            let t_n = tangents.[i+1]
-
-            let v1   = positions.[i+1] - positions.[i]
-            let v1sq = Vec.dot v1 v1
-            let r_L, t_L =
-                if v1sq < eps then r_i, t_i
-                else
-                    let c_r = 2.0 * Vec.dot v1 r_i / v1sq
-                    let c_t = 2.0 * Vec.dot v1 t_i / v1sq
-                    r_i - c_r * v1, t_i - c_t * v1
-
-            let v2   = t_n - t_L
-            let v2sq = Vec.dot v2 v2
-            let r_n  =
-                if v2sq < eps then r_L
-                else
-                    let c2 = 2.0 * Vec.dot v2 r_L / v2sq
-                    r_L - c2 * v2
-
-            dipVecs.[i+1] <- if r_n.Length < eps then r_L else r_n.Normalized
-
-        assembleMesh positions dipVecs
-
-    // ── Dispatch ──────────────────────────────────────────────────────────────
-
-    let buildSurface
+    /// Compute the strike/dip frame for a single segment.
+    let private computeSegmentFrame
             (up            : V3d)
-            (mode          : ExtrusionMode)
-            (controlPoints : (V3d * V3d)[])
+            (useAllPoints  : bool)
+            (neighborCount : int)
+            (points        : V3d[])
+            (i             : int)
+            : SegmentFrame =
+        let p0     = points.[i]
+        let p1     = points.[i + 1]
+        let window = regressionWindow useAllPoints neighborCount i points
+
+        let plane = fitPlane up window
+
+        // Orient the plane normal so it points in the same direction as `up`.
+        let planeNormal =
+            match signedOrientation up plane with
+            | -1 -> -plane.Normal
+            | _  ->  plane.Normal
+
+        let eps = 1e-6
+        let strikeRaw = up.Cross(planeNormal)
+        let strike =
+            if strikeRaw.Length < eps then
+                // Plane is horizontal — strike is undefined; pick any
+                // horizontal axis perpendicular to `up`.
+                let fallback = Vec.cross up V3d.XAxis
+                if fallback.Length < eps then V3d.ZAxis.Normalized
+                else fallback.Normalized
+            else
+                strikeRaw.Normalized
+
+        let dipRaw = strike.Cross(planeNormal)
+        let dip    =
+            if dipRaw.Length < eps then V3d.XAxis
+            else dipRaw.Normalized
+
+        { p0 = p0; p1 = p1; dip = dip; strike = strike }
+
+    /// Build per-segment frames for every segment of the polyline.
+    let computeSegmentFrames
+            (up            : V3d)
+            (useAllPoints  : bool)
+            (neighborCount : int)
+            (points        : V3d[])
+            : SegmentFrame[] =
+        if points.Length < 2 then [||]
+        else
+            let segCount = points.Length - 1
+            Array.init segCount (computeSegmentFrame up useAllPoints neighborCount points)
+
+    // ── Ribbon mesh assembly ─────────────────────────────────────────────────
+
+    /// Build the ribbon mesh as a list of independent quads — one quad per
+    /// polyline segment. Each segment carries its own dip vector, so adjacent
+    /// segments do NOT share vertices.
+    ///
+    /// Vertex layout per segment s = 4*s + {0,1,2,3}:
+    ///   4s+0 : P_s   on the left  (side = -1)
+    ///   4s+1 : P_s   on the right (side = +1)
+    ///   4s+2 : P_s+1 on the left  (side = -1)
+    ///   4s+3 : P_s+1 on the right (side = +1)
+    ///
+    /// The vertex shader extrudes:
+    ///   worldPos = centerPos + side * halfWidth * dipVec
+    let buildRibbonMesh
+            (frames : SegmentFrame[])
             : V3d[] * V3d[] * float32[] * int[] =
-        match mode with
-        | Basic        -> buildDipStrikeSurface   up controlPoints
-        | Stabilized   -> buildStabilizedSurface  up controlPoints
-        | FrenetSerret -> buildFrenetSerretSurface    controlPoints
-        | Bishop       -> buildBishopSurface          controlPoints
-        | RMF          -> buildRMFSurface              controlPoints
+        let segCount = frames.Length
+        let centers  = Array.zeroCreate<V3d>     (4 * segCount)
+        let dips     = Array.zeroCreate<V3d>     (4 * segCount)
+        let sides    = Array.zeroCreate<float32> (4 * segCount)
+        let indices  = Array.zeroCreate<int>     (6 * segCount)
+
+        for s in 0 .. segCount - 1 do
+            let f = frames.[s]
+            let v = 4 * s
+
+            centers.[v + 0] <- f.p0;  dips.[v + 0] <- f.dip;  sides.[v + 0] <- -1.0f
+            centers.[v + 1] <- f.p0;  dips.[v + 1] <- f.dip;  sides.[v + 1] <-  1.0f
+            centers.[v + 2] <- f.p1;  dips.[v + 2] <- f.dip;  sides.[v + 2] <- -1.0f
+            centers.[v + 3] <- f.p1;  dips.[v + 3] <- f.dip;  sides.[v + 3] <-  1.0f
+
+            let k = 6 * s
+            // Triangle 1: L0, R1, L1
+            indices.[k + 0] <- v + 0
+            indices.[k + 1] <- v + 3
+            indices.[k + 2] <- v + 2
+            // Triangle 2: L0, R0, R1
+            indices.[k + 3] <- v + 0
+            indices.[k + 4] <- v + 1
+            indices.[k + 5] <- v + 3
+
+        centers, dips, sides, indices
+
+    // ── Strike-arrow geometry ────────────────────────────────────────────────
+
+    /// Build a small arrow at the midpoint of every segment, pointing along
+    /// the strike direction. Returned as a flat V3d[] suitable for a LineList:
+    /// pairs of (start, end) points.
+    ///
+    /// Each arrow contributes 3 line segments: a shaft and two head wings.
+    /// The head wings are drawn in the plane spanned by (strike, dip) so the
+    /// arrow stays coplanar with the ribbon.
+    let buildStrikeArrowLines
+            (arrowLength : float)
+            (frames      : SegmentFrame[])
+            : V3d[] =
+        let n        = frames.Length
+        let verts    = Array.zeroCreate<V3d> (n * 6)
+        let headLen  = arrowLength * 0.3
+        let headWide = arrowLength * 0.15
+
+        for i in 0 .. n - 1 do
+            let f      = frames.[i]
+            let mid    = 0.5 * (f.p0 + f.p1)
+            let tip    = mid + f.strike * arrowLength
+            let back   = tip - f.strike * headLen
+            let wingL  = back + f.dip * headWide
+            let wingR  = back - f.dip * headWide
+
+            let k = i * 6
+            // shaft
+            verts.[k + 0] <- mid
+            verts.[k + 1] <- tip
+            // left wing
+            verts.[k + 2] <- tip
+            verts.[k + 3] <- wingL
+            // right wing
+            verts.[k + 4] <- tip
+            verts.[k + 5] <- wingR
+
+        verts

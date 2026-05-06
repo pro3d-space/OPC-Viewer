@@ -296,13 +296,6 @@ module ViewCommand =
             match config.Ribbon with
             | None -> RibbonState.defaultState
             | Some ribbonCfg ->
-                let mode =
-                    match ribbonCfg.Mode with
-                    | Some "Stabilized"   -> Stabilized
-                    | Some "FrenetSerret" -> FrenetSerret
-                    | Some "Bishop"       -> Bishop
-                    | Some "RMF"          -> RMF
-                    | _                   -> Basic
                 let halfWidth = ribbonCfg.HalfWidth |> Option.defaultValue 2.0
                 match PRo3D.Viewer.Ribbon.GeoJson.tryParseAllLineStrings ribbonCfg.GeoJson with
                 | Result.Error err ->
@@ -315,7 +308,6 @@ module ViewCommand =
                         allPolylines  = allPolylines
                         selectedIndex = 0
                         halfWidth     = halfWidth
-                        extrusionMode = mode
                         showPolyline  = true }
 
         let patchTrafos =
