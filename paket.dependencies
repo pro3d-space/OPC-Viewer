@@ -8,21 +8,20 @@ storage: none
 nuget FSharp.Core                       >= 8.0.0 lowest_matching: true
 nuget Aardvark.Build                    ~> 1.0.25
 
-nuget Aardvark.Rendering                ~> 5.5.1
-nuget Aardvark.SceneGraph               ~> 5.5.1
-nuget Aardvark.Rendering.Text           ~> 5.5.1
-nuget Aardvark.Application              ~> 5.5.1
+nuget Aardvark.Rendering                ~> 5.6.0
+nuget Aardvark.SceneGraph               ~> 5.6.0
+nuget Aardvark.Rendering.Text           ~> 5.6.0
+nuget Aardvark.Application              ~> 5.6.0
 
-nuget Aardvark.Application.Slim.GL      ~> 5.5.1
-nuget Aardvark.Application.Slim.Vulkan  ~> 5.5.1
+nuget Aardvark.Application.Slim.GL      ~> 5.6.0
+nuget Aardvark.Application.Slim.Vulkan  ~> 5.6.0
 
-nuget FShade                            ~> 5.6.0 
-nuget FShade.Core                       ~> 5.6.0 
+// FShade follows transitively from Aardvark.Rendering 5.6 (FShade 5.7).
 
-nuget Aardvark.SceneGraph.Assimp        ~> 5.5.1
+nuget Aardvark.SceneGraph.Assimp        ~> 5.6.0
 nuget Aardvark.PixImage.Pfim            ~> 0.9.0
-nuget Aardvark.GeoSpatial.Opc           ~> 5.11.2
-nuget OPCViewer.Base                    ~> 1.9.2
+nuget Aardvark.GeoSpatial.Opc           ~> 5.13.0-prerelease0002
+nuget OPCViewer.Base                    ~> 1.10.0
 
 nuget FSharp.Data.Adaptive              ~> 1.2.16
 
@@ -33,14 +32,15 @@ nuget Aardvark.Data.Opc                 ~> 0.11.0
 nuget Aardvark.Data.Wavefront           ~> 5.3.0
 nuget Uncodium.Geometry.TriangleSet     ~> 0.5.0
 
-nuget Aardvark.Dom.Core                 ~> 1.0.5
-nuget Aardvark.Dom.Elm                  ~> 1.0.5
-nuget Aardvark.Dom.Remote               ~> 1.0.5
+// Aardvark.Dom.* packages were listed but unused in code, and 1.0.5
+// requires Aardvark.SceneGraph 5.5 which conflicts with our 5.6 bump.
+// Re-add a 5.6-compatible version if/when something actually consumes them.
+
 nuget Aardvark.FontProvider             ~> 0.1.0
 
 // Aardvark.Media (classic UI) - used by PRo3D.Viewer.SimpleGui
-nuget Aardvark.UI                       ~> 5.5.4
-nuget Aardvark.UI.Primitives            ~> 5.5.4
+nuget Aardvark.UI                       ~> 5.6.0
+nuget Aardvark.UI.Primitives            ~> 5.6.0
 nuget Aardium                           ~> 2.1.1
 nuget Adaptify.Core                     ~> 1.3.5
 

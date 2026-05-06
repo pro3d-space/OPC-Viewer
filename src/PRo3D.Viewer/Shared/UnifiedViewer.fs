@@ -98,7 +98,7 @@ module UnifiedViewer =
         let diffuseLighting (v : Vertex) =
             fragment {
                 // Light from top-right-behind (towards camera) in view space
-                let lightDir = Vec.normalize (V3d(1.0, 2.0, 3.0))
+                let lightDir = Vec.normalize (V3f(1.0f, 2.0f, 3.0f))
 
                 // Normal must be in view space
                 let n = Vec.normalize v.n
@@ -107,11 +107,11 @@ module UnifiedViewer =
                 let diffuse = abs (Vec.dot n lightDir)
 
                 // Ambient + diffuse
-                let ambient = 0.5
-                let lighting = ambient + (1.0 - ambient) * diffuse
+                let ambient = 0.5f
+                let lighting = ambient + (1.0f - ambient) * diffuse
 
                 // Modulate color by lighting
-                return V4d(v.c.XYZ * lighting, v.c.W)
+                return V4f(v.c.XYZ * lighting, v.c.W)
             }
 
         type PickBuffer = {
@@ -135,30 +135,30 @@ module UnifiedViewer =
 
         // Diff-specific vertex type
         type VertexWithDistance = {
-            [<Position>] pos : V4d
-            [<Normal>] n : V3d
-            [<Color>] c : V4d
-            [<Semantic("LightDir")>] ldir : V3d
-            [<Semantic("ViewPosition")>] vp : V4d
-            [<Semantic(Diff.DiffRendering.DefaultSemantic.Distances)>] distance : V3d
+            [<Position>] pos : V4f
+            [<Normal>] n : V3f
+            [<Color>] c : V4f
+            [<Semantic("LightDir")>] ldir : V3f
+            [<Semantic("ViewPosition")>] vp : V4f
+            [<Semantic(Diff.DiffRendering.DefaultSemantic.Distances)>] distance : V3f
         }
 
         let stableTrafoWithDistance (v : VertexWithDistance) =
             vertex {
                 let vp = uniform.ModelViewTrafo * v.pos
-                return { 
+                return {
                     v with
                         pos = uniform.ProjTrafo * vp
                         vp = vp
-                        n = (uniform.ModelViewTrafo * V4d(v.n, 0.0)).XYZ
+                        n = (uniform.ModelViewTrafo * V4f(v.n, 0.0f)).XYZ
                         c = v.c
                 }
             }
 
         type NormalVertex = {
-            [<Position>] pos : V4d
+            [<Position>] pos : V4f
             [<SourceVertexIndex>] i : int
-            [<Normal>] n : V3d
+            [<Normal>] n : V3f
         }
 
         let generateNormal (t : Triangle<NormalVertex>) =
@@ -177,17 +177,17 @@ module UnifiedViewer =
                 yield { t.P2 with n = normal; i = 2 }
             }
 
-        let showDistances (v : VertexWithDistance) = 
+        let showDistances (v : VertexWithDistance) =
             fragment {
                 if uniform.ShowDistances then
                     let n = v.n |> Vec.normalize
                     let ld = v.vp.XYZ |> Vec.normalize
 
-                    let ambient = 0.0
+                    let ambient = 0.0f
                     let diffuse = Vec.dot ld n |> abs
 
-                    let l = ambient + (1.0 - ambient) * diffuse
-                    return V4d(v.distance * l, 1.0)
+                    let l = ambient + (1.0f - ambient) * diffuse
+                    return V4f(v.distance * l, 1.0f)
                 else
                     return v.c
             }

@@ -52,14 +52,18 @@ module OpcLoading =
             |> Box3d
         hierarchies, combined
 
+    /// Default texture id used by the multi-texturing pipeline when nothing
+    /// more specific is selected. `LegacyId 0` picks the first texture layer.
+    let private defaultSecondaryTextureId : TextureId =
+        { texture = TextureReference.LegacyId 0
+          channel = ChannelReference.ChannelWithIndex 0 }
+
     /// Build the scene graph for one patch hierarchy, including the multi-texturing
     /// hooks from `SecondaryTexture` so the UI can toggle a secondary layer on/off.
     /// The `SecondaryTextureId` attribute is applied unconditionally so that the
     /// AG-getter `SecondaryTexture.getSecondary` can resolve it; whether the
     /// secondary layer is actually shown is decided by the `UseSecondary` uniform
     /// in the fragment shader.
-    /// (The installed `Aardvark.GeoSpatial.Opc 5.11.2` exposes the legacy int-based
-    /// API; the newer `TextureId`/`TextureReference` types are not in this version.)
     let buildHierarchySg
             (signature     : IFramebufferSignature)
             (runner        : Load.Runner)
@@ -81,4 +85,5 @@ module OpcLoading =
             (Some (SecondaryTexture.textures paths))
             (Some (SecondaryTexture.vertexAttributes paths))
             loader
-        |> SecondaryTexture.Sg.applySecondaryTextureId (AVal.constant 0)
+        |> SecondaryTexture.Sg.applySecondaryTextureId
+                (AVal.constant (Some defaultSecondaryTextureId))
