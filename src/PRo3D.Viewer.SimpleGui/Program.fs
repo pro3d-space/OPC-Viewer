@@ -33,11 +33,15 @@ type private Args = {
     height        : int
     samples       : int
     logFile       : Option<string>
+    /// Optional override for the primary-texture LegacyId in screenshot
+    /// mode. Defaults to "last layer" (= albedo) when not given.
+    textureIndex  : Option<int>
 }
 
 let private defaultArgs = {
     folder = None; screenshot = None
     width = 1280; height = 800; samples = 4; logFile = None
+    textureIndex = None
 }
 
 let rec private parseArgs (acc : Args) (xs : list<string>) =
@@ -48,6 +52,7 @@ let rec private parseArgs (acc : Args) (xs : list<string>) =
     | "--height" :: h :: rest -> parseArgs { acc with height = int h } rest
     | "--samples" :: s :: rest -> parseArgs { acc with samples = int s } rest
     | "--log"    :: p :: rest -> parseArgs { acc with logFile = Some p } rest
+    | "--texture" :: i :: rest -> parseArgs { acc with textureIndex = Some (int i) } rest
     | path :: rest when acc.folder = None -> parseArgs { acc with folder = Some path } rest
     | unknown :: rest ->
         Log.warn "[SimpleGui] ignoring unknown arg: %s" unknown
@@ -77,7 +82,8 @@ let private runScreenshot
         (outPath    : string)
         (width      : int)
         (height     : int)
-        (samples    : int) =
+        (samples    : int)
+        (textureIdx : Option<int>) =
 
     let signature =
         runtime.CreateFramebufferSignature(
@@ -94,7 +100,9 @@ let private runScreenshot
     let frustum = Frustum.perspective 60.0 near far aspect
 
     // default to the last layer = real albedo for typical OPC datasets
-    let primaryIdx = max 0 (scene.TextureCount - 1)
+    let primaryIdx =
+        textureIdx |> Option.defaultValue (max 0 (scene.TextureCount - 1))
+    Log.line "[SimpleGui] using primary texture index %d (of %d)" primaryIdx scene.TextureCount
 
     let sg =
         buildScene scene
@@ -147,7 +155,7 @@ let main argv =
     | Some out, Some folder ->
         match App.tryLoadFolder folder with
         | App.Loaded scene ->
-            runScreenshot runtime scene out args.width args.height args.samples
+            runScreenshot runtime scene out args.width args.height args.samples args.textureIndex
             0
         | App.Failed msg ->
             Log.warn "[SimpleGui] screenshot: cannot load %s — %s" folder msg

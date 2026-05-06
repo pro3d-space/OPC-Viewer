@@ -46,6 +46,15 @@ module OpcLoading =
         let textures = (rootPatch h).info.Textures
         max 1 (List.length textures / 2)
 
+    /// For diagnostics: print the texture-list ordering so callers can map
+    /// `LegacyId i` to the actual filename.
+    let logTextureLayers (h : PatchHierarchy) =
+        let textures = (rootPatch h).info.Textures
+        Log.line "[OpcLoading] root patch has %d Textures entries:" (List.length textures)
+        textures
+        |> List.iteri (fun i t ->
+            Log.line "  [%d] %s" i t.fileName)
+
     /// Loads each patch hierarchy from disk and combines the root-node
     /// bounding boxes (i.e. the *lowest-quality* coverage of every OPC).
     /// Returns (loadedHierarchies, combinedBox).

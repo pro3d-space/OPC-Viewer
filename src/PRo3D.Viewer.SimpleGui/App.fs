@@ -121,7 +121,9 @@ let tryLoadFolder (path : string) : LoadOutcome =
             let textureCount =
                 hierarchies
                 |> List.tryHead
-                |> Option.map (fst >> OpcLoading.textureLayerCount)
+                |> Option.map (fun (h, _) ->
+                    OpcLoading.logTextureLayers h
+                    OpcLoading.textureLayerCount h)
                 |> Option.defaultValue 1
             Loaded {
                 RootDirectory = path
