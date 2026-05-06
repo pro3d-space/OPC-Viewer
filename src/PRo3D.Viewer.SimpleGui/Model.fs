@@ -13,6 +13,12 @@ type LoadedScene = {
     HierarchyPaths  : list<string>
     BoundingBox     : Box3d
     Sky             : V3d
+    /// Number of distinct primary texture layers available on the root
+    /// patch. Convention: `LegacyId i` selects layer `i`; the geospatial
+    /// loader takes `i mod TextureCount`. Typically the last index is the
+    /// real albedo (everything before tends to be data layers — normals,
+    /// gravity, lon/lat/rad, …).
+    TextureCount    : int
 }
 
 [<ModelType>]
@@ -24,6 +30,9 @@ type Model = {
     /// Frustum near/far derived from the bounding box.
     near              : float
     far               : float
+    /// Index of the primary texture layer (`LegacyId`). Defaults to the
+    /// last layer on load (= the real albedo for typical OPC datasets).
+    primaryTextureIndex : int
     /// UI toggles, mirroring TestViewer.fs key bindings.
     useSecondary      : bool
     secondaryOpacity  : float

@@ -93,8 +93,12 @@ let private runScreenshot
     let aspect = float width / float height
     let frustum = Frustum.perspective 60.0 near far aspect
 
+    // default to the last layer = real albedo for typical OPC datasets
+    let primaryIdx = max 0 (scene.TextureCount - 1)
+
     let sg =
         buildScene scene
+        |> OpcLoading.withPrimaryTextureIndex (AVal.constant (Some primaryIdx))
         |> Sg.viewTrafo  (view |> CameraView.viewTrafo |> AVal.constant)
         |> Sg.projTrafo  (frustum |> Frustum.projTrafo |> AVal.constant)
         |> Sg.effect     App.sceneEffects

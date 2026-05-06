@@ -55,6 +55,9 @@ type Action =
     | ToggleLodVis
     | ToggleFillMode
     | RecenterCamera
+    | NextPrimaryTexture
+    | PrevPrimaryTexture
+    | SetPrimaryTextureLast
 
 type LoadOutcome =
     | Loaded of LoadedScene
@@ -87,18 +90,20 @@ let sceneEffects : list<FShade.Effect> = [
 let initialModel (preload : Option<LoadedScene>) : Model =
     let bb = preload |> Option.map (fun s -> s.BoundingBox) |> Option.defaultValue Box3d.Invalid
     let near, far = nearFarForBox bb
+    let initialPrimary = preload |> Option.map (fun s -> max 0 (s.TextureCount - 1)) |> Option.defaultValue 0
     {
-        loaded            = preload
-        cameraState       = { FreeFlyController.initial with view = cameraForBox bb }
-        near              = near
-        far               = far
-        useSecondary      = false
-        secondaryOpacity  = 1.0
-        lodVisEnabled     = false
-        fillMode          = FillMode.Fill
-        statusMessage     =
+        loaded              = preload
+        cameraState         = { FreeFlyController.initial with view = cameraForBox bb }
+        near                = near
+        far                 = far
+        primaryTextureIndex = initialPrimary
+        useSecondary        = false
+        secondaryOpacity    = 1.0
+        lodVisEnabled       = false
+        fillMode            = FillMode.Fill
+        statusMessage       =
             match preload with
-            | Some s -> sprintf "Loaded %d hierarchies from %s" (List.length s.HierarchyPaths) s.RootDirectory
+            | Some s -> sprintf "Loaded %d hierarchies from %s (%d texture layers)" (List.length s.HierarchyPaths) s.RootDirectory s.TextureCount
             | None -> "Pick an OPC folder to load."
     }
 
@@ -109,11 +114,28 @@ let tryLoadFolder (path : string) : LoadOutcome =
         if List.isEmpty basePaths then
             Failed (sprintf "no patchhierarchy.xml found under %s" path)
         else
-            let _, bb = OpcLoading.loadHierarchies basePaths
+            let hierarchies, bb = OpcLoading.loadHierarchies basePaths
             let sky = if Vec.length bb.Center > 0.0 then bb.Center.Normalized else V3d.OOI
-            Loaded { RootDirectory = path; HierarchyPaths = basePaths; BoundingBox = bb; Sky = sky }
+            // any hierarchy will do — they should all share the same texture
+            // layer layout. Fall back to 1 if something is off.
+            let textureCount =
+                hierarchies
+                |> List.tryHead
+                |> Option.map (fst >> OpcLoading.textureLayerCount)
+                |> Option.defaultValue 1
+            Loaded {
+                RootDirectory = path
+                HierarchyPaths = basePaths
+                BoundingBox = bb
+                Sky = sky
+                TextureCount = textureCount
+            }
     with ex ->
         Failed (sprintf "load failed: %s" ex.Message)
+
+let private wrapTextureIndex (count : int) (idx : int) =
+    if count <= 0 then 0
+    else ((idx % count) + count) % count
 
 let update (m : Model) (a : Action) =
     match a with
@@ -129,8 +151,9 @@ let update (m : Model) (a : Action) =
                 loaded = Some scene
                 near = near
                 far = far
+                primaryTextureIndex = max 0 (scene.TextureCount - 1)
                 cameraState = { m.cameraState with view = cameraForBox scene.BoundingBox }
-                statusMessage = sprintf "Loaded %d hierarchies from %s" (List.length scene.HierarchyPaths) path }
+                statusMessage = sprintf "Loaded %d hierarchies from %s (%d texture layers)" (List.length scene.HierarchyPaths) path scene.TextureCount }
         | Failed msg ->
             { m with statusMessage = msg }
     | ToggleSecondary ->
@@ -144,13 +167,33 @@ let update (m : Model) (a : Action) =
         match m.loaded with
         | Some s -> { m with cameraState = { m.cameraState with view = cameraForBox s.BoundingBox } }
         | None -> m
+    | NextPrimaryTexture ->
+        match m.loaded with
+        | Some s -> { m with primaryTextureIndex = wrapTextureIndex s.TextureCount (m.primaryTextureIndex + 1) }
+        | None -> m
+    | PrevPrimaryTexture ->
+        match m.loaded with
+        | Some s -> { m with primaryTextureIndex = wrapTextureIndex s.TextureCount (m.primaryTextureIndex - 1) }
+        | None -> m
+    | SetPrimaryTextureLast ->
+        match m.loaded with
+        | Some s -> { m with primaryTextureIndex = max 0 (s.TextureCount - 1) }
+        | None -> m
 
 /// Build the scene graph, wired up to all the toggle uniforms.
 /// `buildScene` constructs the per-hierarchy SG using the captured runtime/runner.
 let private buildSceneSg (buildScene : LoadedScene -> Aardvark.SceneGraph.ISg) (m : AdaptiveModel) : ISg<Action> =
+    // primary texture index is only meaningful when a scene is loaded;
+    // wrap it in Some so the AttributeParameters applicator sees a value.
+    let primaryTexture : aval<Option<int>> =
+        m.primaryTextureIndex |> AVal.map Some
+
     let opcSg : aval<ISg<Action>> =
         m.loaded |> AVal.map (function
-            | Some scene -> buildScene scene |> Sg.noEvents
+            | Some scene ->
+                buildScene scene
+                |> OpcLoading.withPrimaryTextureIndex primaryTexture
+                |> Sg.noEvents
             | None -> Sg.empty)
 
     Sg.dynamic opcSg
@@ -214,6 +257,20 @@ let view (buildScene : LoadedScene -> Aardvark.SceneGraph.ISg) (m : AdaptiveMode
                         let attrs = if isWire then attribute "checked" "checked" :: baseAttrs else baseAttrs
                         yield input attrs
                         yield text " wireframe"
+                    }
+                )
+            ]
+            div [ style "margin-top: 6px" ] [
+                Incremental.div AttributeMap.empty (
+                    alist {
+                        let! loaded = m.loaded
+                        let! idx    = m.primaryTextureIndex
+                        let count = loaded |> Option.map (fun s -> s.TextureCount) |> Option.defaultValue 0
+                        yield div [ style "font-size: 12px; margin-bottom: 2px" ]
+                                  [ text (sprintf "primary texture: %d / %d" idx (max 0 (count - 1))) ]
+                        yield button [ clazz "ui mini button"; onClick (fun _ -> PrevPrimaryTexture) ] [ text "<" ]
+                        yield button [ clazz "ui mini button"; onClick (fun _ -> NextPrimaryTexture) ] [ text ">" ]
+                        yield button [ clazz "ui mini button"; onClick (fun _ -> SetPrimaryTextureLast) ] [ text "albedo (last)" ]
                     }
                 )
             ]

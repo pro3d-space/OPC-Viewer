@@ -30,12 +30,21 @@ module OpcLoading =
             |> Seq.distinct
             |> List.ofSeq
 
+    let private rootPatch (h : PatchHierarchy) : Patch =
+        match h.tree with
+        | QTree.Node (n, _) -> n
+        | QTree.Leaf n -> n
+
     let private rootBoundingBox (h : PatchHierarchy) : Box3d =
-        let rootPatch =
-            match h.tree with
-            | QTree.Node (n, _) -> n
-            | QTree.Leaf n -> n
-        rootPatch.info.GlobalBoundingBox
+        (rootPatch h).info.GlobalBoundingBox
+
+    /// Number of distinct texture layers on the root patch. The on-disk
+    /// `Textures` list contains a (texture, weights) pair per layer, so the
+    /// effective layer count is `length / 2` — this matches the modulo the
+    /// geospatial loader uses internally for `LegacyId` lookups.
+    let textureLayerCount (h : PatchHierarchy) : int =
+        let textures = (rootPatch h).info.Textures
+        max 1 (List.length textures / 2)
 
     /// Loads each patch hierarchy from disk and combines the root-node
     /// bounding boxes (i.e. the *lowest-quality* coverage of every OPC).
@@ -87,3 +96,16 @@ module OpcLoading =
             loader
         |> SecondaryTexture.Sg.applySecondaryTextureId
                 (AVal.constant (Some defaultSecondaryTextureId))
+
+    /// Wraps an `ISg` in an `AttributeParameters` applicator that selects
+    /// the primary texture by its `LegacyId` index. Pass `None` to fall
+    /// back to the loader's default.
+    let withPrimaryTextureIndex (textureIndex : aval<Option<int>>) (sg : ISg) : ISg =
+        let attribs =
+            textureIndex |> AVal.map (fun idx ->
+                let selected =
+                    idx |> Option.map (fun i ->
+                        { texture = TextureReference.LegacyId i
+                          channel = ChannelReference.ChannelWithIndex 0 })
+                { AttributeParameters.defaultParams with selectedTexture = selected })
+        Sg.AttributeParameters attribs sg
