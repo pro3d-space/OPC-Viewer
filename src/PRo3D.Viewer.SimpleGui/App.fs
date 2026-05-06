@@ -210,7 +210,7 @@ let view (buildScene : LoadedScene -> Aardvark.SceneGraph.ISg) (m : AdaptiveMode
             m.cameraState CameraAction frustum
             (AttributeMap.ofList [
                 style "position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0"
-                attribute "data-samples" "8"
+                attribute "data-samples" "1"
             ])
             (buildSceneSg buildScene m)
 
