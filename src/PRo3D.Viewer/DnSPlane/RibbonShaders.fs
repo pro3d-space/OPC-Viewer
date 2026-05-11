@@ -29,14 +29,18 @@ module RibbonShaders =
     let extrude (v : RibbonVertex) =
         vertex {
             let hw : float = uniform?HalfWidth
-            // Extrude in world space — dipVec stays fixed regardless of camera.
-            let extrudedWorld = v.pos.XYZ + v.side * 1.0 * v.dipVec
-            // Then transform to clip space via ModelViewTrafo + ProjTrafo.
-            let posView = uniform.ModelViewTrafo * V4d(extrudedWorld, 1.0)
-            let nView   = (uniform.ModelViewTrafo * V4d(v.n, 0.0)).XYZ |> Vec.normalize
+
+            // Use the stable model trafo — works in eye-relative space
+            // to avoid float precision loss at large coordinates
+            let centerView  = uniform.ModelViewTrafo * v.pos
+            let dipView     = (uniform.ModelViewTrafo * V4d(v.dipVec, 0.0)).XYZ
+
+            let extrudedView = V4d(centerView.XYZ + v.side * hw * dipView, 1.0)
+            let nView        = (uniform.ModelViewTrafo * V4d(v.n, 0.0)).XYZ |> Vec.normalize
+
             return { v with
-                        pos = uniform.ProjTrafo * posView
-                        }
+                        pos = uniform.ProjTrafo * extrudedView
+                        n   = nView }
         }
 
     let simpleLight (v : RibbonVertex) =

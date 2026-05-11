@@ -105,30 +105,66 @@ module RibbonScene =
             // normal of the extruded quad.
             let normals =
                 Array.init centers.Length (fun v ->
-                    let s     = v / 4         // segment index (4 verts per segment)
-                    let f     = frames.[s]
-                    let tan   = (f.p1 - f.p0).Normalized
-                    Vec.cross f.dip tan |> Vec.normalize |> V3f)
+                    let s   = v / 4         // segment index (4 verts per segment)
+                    let f   = frames.[s]
+                    let tan = (f.p1 - f.p0).Normalized
+                    Vec.cross dipVecs.[v] tan |> Vec.normalize |> V3f)
 
-            IndexedGeometry(
-                Mode       = IndexedGeometryMode.TriangleList,
-                IndexArray = (indices :> System.Array),
-                IndexedAttributes =
-                    SymDict.ofList [
-                        DefaultSemantic.Positions, centers |> Array.map V3f :> System.Array
-                        DefaultSemantic.Normals,   normals                  :> System.Array
-                        Sym.ofString "DipVec",     dipVecs |> Array.map V3f :> System.Array
-                        Sym.ofString "Side",       sides                    :> System.Array
-                    ]
-            )
-            |> Sg.ofIndexedGeometry
-            |> Sg.uniform "HalfWidth" (AVal.constant halfWidth)
-            |> Sg.shader {
-                do! RibbonShaders.extrude
-                do! DefaultSurfaces.constantColor (C4f(0.80f, 0.55f, 0.28f, 1.0f))
-                do! SharedShaders.noPick
-            }
-            |> Sg.cullMode' CullMode.None
+            let ribbonFill =
+                IndexedGeometry(
+                    Mode       = IndexedGeometryMode.TriangleList,
+                    IndexArray = (indices :> System.Array),
+                    IndexedAttributes =
+                        SymDict.ofList [
+                            DefaultSemantic.Positions, centers |> Array.map V3f :> System.Array
+                            DefaultSemantic.Normals,   normals                  :> System.Array
+                            Sym.ofString "DipVec",     dipVecs |> Array.map V3f :> System.Array
+                            Sym.ofString "Side",       sides                    :> System.Array
+                        ]
+                )
+                |> Sg.ofIndexedGeometry
+                |> Sg.uniform "HalfWidth" (AVal.constant halfWidth)
+                |> Sg.shader {
+                    do! RibbonShaders.extrude
+                    do! DefaultSurfaces.constantColor (C4f(0.80f, 0.55f, 0.28f, 1.0f))
+                    do! SharedShaders.noPick
+                }
+                |> Sg.cullMode' CullMode.None
+
+            let lineIndices =
+                Array.init ((centers.Length - 1) * 8) (fun k ->
+                    let seg = k / 8;
+                    let li  = 2 * seg;
+                    let ri  = 2 * seg + 1
+                    let li1 = 2 * seg + 2;
+                    let ri1 = 2 * seg + 3
+                    match k % 8 with
+                    | 0 -> li  | 1 -> li1   // left edge
+                    | 2 -> ri  | 3 -> ri1   // right edge
+                    | 4 -> li  | 5 -> ri    // start cap
+                    | 6 -> li1 | _ -> ri1)  // end cap
+
+            let ribbonOutlines =
+                IndexedGeometry(
+                    Mode       = IndexedGeometryMode.LineList,
+                    IndexArray = (lineIndices :> System.Array),
+                    IndexedAttributes =
+                        SymDict.ofList [
+                            DefaultSemantic.Positions, centers |> Array.map V3f :> System.Array
+                            DefaultSemantic.Normals,   normals                  :> System.Array
+                            Sym.ofString "DipVec",     dipVecs |> Array.map V3f :> System.Array
+                            Sym.ofString "Side",       sides                    :> System.Array
+                        ]
+                )
+                |> Sg.ofIndexedGeometry
+                |> Sg.uniform "HalfWidth" (AVal.constant halfWidth)
+                |> Sg.shader {
+                    do! RibbonShaders.extrude
+                    do! DefaultSurfaces.constantColor C4f.Black
+                    do! SharedShaders.noPick
+                }
+
+            Sg.andAlso ribbonOutlines ribbonFill
 
     /// Red polyline along the control points.
     let private polylineSg (points : V3d[]) : ISg =
@@ -145,32 +181,11 @@ module RibbonScene =
             )
             |> Sg.ofIndexedGeometry
             |> Sg.shader {
-                do! DefaultSurfaces.trafo
+                do! DefaultSurfaces.stableTrafo
                 do! DefaultSurfaces.constantColor C4f.Red
                 do! SharedShaders.noPick
             }
 
-    /// Cyan strike-direction arrows, one at the midpoint of each segment.
-    let private strikeArrowsSg
-            (frames      : RibbonAlgorithms.SegmentFrame[])
-            (arrowLength : float)
-            : ISg =
-        if frames.Length = 0 then Sg.ofList []
-        else
-            let lineVerts =
-                RibbonAlgorithms.buildStrikeArrowLines arrowLength frames
-                |> Array.map V3f
-            IndexedGeometry(
-                Mode = IndexedGeometryMode.LineList,
-                IndexedAttributes =
-                    SymDict.ofList [ DefaultSemantic.Positions, lineVerts :> System.Array ]
-            )
-            |> Sg.ofIndexedGeometry
-            |> Sg.shader {
-                do! DefaultSurfaces.trafo
-                do! DefaultSurfaces.constantColor C4f.Cyan
-                do! SharedShaders.noPick
-            }
 
     // ── public API ────────────────────────────────────────────────────────────
 
@@ -179,20 +194,21 @@ module RibbonScene =
         let pts = RibbonState.currentPoints state
         if pts.Length < 2 then Sg.ofList []
         else
+            // Pre-apply the optional transform in world space so no child
+            // Sg node ever sees a double-transform.
+            let worldPts =
+                match transform with
+                | None   -> pts
+                | Some t -> pts |> Array.map (fun p -> t.Forward.TransformPos p)
+
             let frames =
                 RibbonAlgorithms.computeSegmentFrames
-                    up state.useAllPoints state.neighborCount pts
+                    up state.useAllPoints state.neighborCount worldPts
 
-            // Make the strike arrow scale with the ribbon's extrusion length so
-            // the visualisation stays balanced as the user adjusts +/-.
             let arrowLength = max 0.5 (state.halfWidth * 0.8)
 
             let parts =
-                [ yield ribbonSg frames state.halfWidth
-                  if state.showPolyline     then yield polylineSg     pts
-                  if state.showStrikeArrows then yield strikeArrowsSg frames arrowLength ]
+                [   yield ribbonSg frames state.halfWidth
+                    if state.showPolyline then yield polylineSg worldPts ]
 
-            let sg = Sg.ofList parts
-            match transform with
-            | Some t -> sg |> Sg.trafo' t
-            | None   -> sg
+            Sg.ofList parts   // no Sg.trafo' — already baked in

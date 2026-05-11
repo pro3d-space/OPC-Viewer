@@ -14,8 +14,12 @@ open Aardvark.Geometry
 ///   3. derive the geological strike and dip vectors using up = Y:
 ///         strike = up × planeNormal
 ///         dip    = strike × planeNormal
-///   4. emit a quad (P_i, P_{i+1}) extruded ±halfWidth along the dip vector,
-///   5. emit a small arrow at the segment midpoint pointing along strike.
+///   4. emit a quad (P_i, P_{i+1}) extruded ±halfWidth along the dip vector.
+///
+/// To keep adjacent quads connected the dip vector at every interior
+/// polyline vertex is the average of the two incident segment dips, so
+/// neighbouring segments meet along a shared edge instead of producing
+/// disjoint floating ribbons.
 ///
 /// The vertex shader does the actual extrusion:
 ///   worldPos = centerPos + side * halfWidth * dipVec
@@ -85,15 +89,34 @@ module RibbonAlgorithms =
     // ── Per-segment dip / strike ─────────────────────────────────────────────
 
     /// Result of running the dip/strike fit for one polyline segment.
+    /// To stitch adjacent quads together we let each endpoint use the
+    /// average of its two incident segment dips: `dipP0` is averaged with
+    /// the previous segment, `dipP1` with the next. End segments fall back
+    /// to the segment's own dip on the open side.
     type SegmentFrame =
         {
             /// First polyline endpoint of the segment.
             p0     : V3d
             /// Second polyline endpoint of the segment.
             p1     : V3d
-            /// In-plane direction of steepest descent (extrusion direction).
+            /// Extrusion direction at p0  (averaged with the previous segment,
+            /// or equal to this segment's dip for the first segment).
+            dipP0  : V3d
+            /// Extrusion direction at p1  (averaged with the next segment,
+            /// or equal to this segment's dip for the last segment).
+            dipP1  : V3d
+            /// In-plane horizontal direction. Kept on the frame because the
+            /// scene-graph builder uses it (together with the per-vertex dip)
+            /// to derive the shading normal of the extruded quad.
+            strike : V3d
+        }
+
+    /// Internal: per-segment fit result before neighbour averaging.
+    type private RawSegment =
+        {
+            p0     : V3d
+            p1     : V3d
             dip    : V3d
-            /// In-plane horizontal direction (visualised by the arrow).
             strike : V3d
         }
 
@@ -114,14 +137,14 @@ module RibbonAlgorithms =
             let hi = min (n - 1) (i + 1 + neighborCount)
             points.[lo .. hi]
 
-    /// Compute the strike/dip frame for a single segment.
-    let private computeSegmentFrame
+    /// Compute the raw (unsmoothed) dip/strike for a single segment.
+    let private computeRawSegment
             (up            : V3d)
             (useAllPoints  : bool)
             (neighborCount : int)
             (points        : V3d[])
             (i             : int)
-            : SegmentFrame =
+            : RawSegment =
         let p0     = points.[i]
         let p1     = points.[i + 1]
         let window = regressionWindow useAllPoints neighborCount i points
@@ -135,7 +158,7 @@ module RibbonAlgorithms =
             | _  ->  plane.Normal
 
         let eps = 1e-6
-        let strikeRaw = up.Cross(planeNormal)
+        let strikeRaw = Vec.cross up planeNormal
         let strike =
             if strikeRaw.Length < eps then
                 // Plane is horizontal — strike is undefined; pick any
@@ -146,14 +169,24 @@ module RibbonAlgorithms =
             else
                 strikeRaw.Normalized
 
-        let dipRaw = strike.Cross(planeNormal)
+        let dipRaw = Vec.cross strike planeNormal
         let dip    =
             if dipRaw.Length < eps then V3d.XAxis
             else dipRaw.Normalized
 
         { p0 = p0; p1 = p1; dip = dip; strike = strike }
 
+    /// Average two dip vectors (both unit length) and re-normalise.
+    /// Falls back to `a` if the sum collapses to zero (anti-parallel dips).
+    let private averageDip (a : V3d) (b : V3d) : V3d =
+        let s = a + b
+        if s.Length < 1e-6 then a else s.Normalized
+
     /// Build per-segment frames for every segment of the polyline.
+    /// Adjacent segments share their endpoint dip vectors so that the
+    /// extruded quads connect along their common edge: at each interior
+    /// polyline vertex the two incident segments use the same averaged
+    /// dip, which makes the corresponding quad corners coincide in space.
     let computeSegmentFrames
             (up            : V3d)
             (useAllPoints  : bool)
@@ -163,7 +196,29 @@ module RibbonAlgorithms =
         if points.Length < 2 then [||]
         else
             let segCount = points.Length - 1
-            Array.init segCount (computeSegmentFrame up useAllPoints neighborCount points)
+
+            // Pass 1: compute the raw dip/strike for each segment independently.
+            let raw =
+                Array.init segCount
+                    (computeRawSegment up useAllPoints neighborCount points)
+
+            // Pass 2: blend dips at shared polyline vertices so adjacent
+            // quads connect. End segments keep their own dip on the open side.
+            Array.init segCount (fun i ->
+                let r     = raw.[i]
+                let dipP0 =
+                    if i = 0 then r.dip
+                    else averageDip raw.[i - 1].dip r.dip
+                let dipP1 =
+                    if i = segCount - 1 then r.dip
+                    else averageDip r.dip raw.[i + 1].dip
+                {
+                    p0     = r.p0
+                    p1     = r.p1
+                    dipP0  = dipP0
+                    dipP1  = dipP1
+                    strike = r.strike
+                })
 
     // ── Ribbon mesh assembly ─────────────────────────────────────────────────
 
@@ -192,10 +247,15 @@ module RibbonAlgorithms =
             let f = frames.[s]
             let v = 4 * s
 
-            centers.[v + 0] <- f.p0;  dips.[v + 0] <- f.dip;  sides.[v + 0] <- -1.0f
-            centers.[v + 1] <- f.p0;  dips.[v + 1] <- f.dip;  sides.[v + 1] <-  1.0f
-            centers.[v + 2] <- f.p1;  dips.[v + 2] <- f.dip;  sides.[v + 2] <- -1.0f
-            centers.[v + 3] <- f.p1;  dips.[v + 3] <- f.dip;  sides.[v + 3] <-  1.0f
+            // p0 endpoints use the dip averaged with the previous segment;
+            // p1 endpoints use the dip averaged with the next segment.
+            // Adjacent segments therefore share identical extruded-corner
+            // positions and the ribbon is watertight along every interior
+            // polyline vertex.
+            centers.[v + 0] <- f.p0;  dips.[v + 0] <- f.dipP0;  sides.[v + 0] <- -1.0f
+            centers.[v + 1] <- f.p0;  dips.[v + 1] <- f.dipP0;  sides.[v + 1] <-  1.0f
+            centers.[v + 2] <- f.p1;  dips.[v + 2] <- f.dipP1;  sides.[v + 2] <- -1.0f
+            centers.[v + 3] <- f.p1;  dips.[v + 3] <- f.dipP1;  sides.[v + 3] <-  1.0f
 
             let k = 6 * s
             // Triangle 1: L0, R1, L1
@@ -208,42 +268,3 @@ module RibbonAlgorithms =
             indices.[k + 5] <- v + 3
 
         centers, dips, sides, indices
-
-    // ── Strike-arrow geometry ────────────────────────────────────────────────
-
-    /// Build a small arrow at the midpoint of every segment, pointing along
-    /// the strike direction. Returned as a flat V3d[] suitable for a LineList:
-    /// pairs of (start, end) points.
-    ///
-    /// Each arrow contributes 3 line segments: a shaft and two head wings.
-    /// The head wings are drawn in the plane spanned by (strike, dip) so the
-    /// arrow stays coplanar with the ribbon.
-    let buildStrikeArrowLines
-            (arrowLength : float)
-            (frames      : SegmentFrame[])
-            : V3d[] =
-        let n        = frames.Length
-        let verts    = Array.zeroCreate<V3d> (n * 6)
-        let headLen  = arrowLength * 0.3
-        let headWide = arrowLength * 0.15
-
-        for i in 0 .. n - 1 do
-            let f      = frames.[i]
-            let mid    = 0.5 * (f.p0 + f.p1)
-            let tip    = mid + f.strike * arrowLength
-            let back   = tip - f.strike * headLen
-            let wingL  = back + f.dip * headWide
-            let wingR  = back - f.dip * headWide
-
-            let k = i * 6
-            // shaft
-            verts.[k + 0] <- mid
-            verts.[k + 1] <- tip
-            // left wing
-            verts.[k + 2] <- tip
-            verts.[k + 3] <- wingL
-            // right wing
-            verts.[k + 4] <- tip
-            verts.[k + 5] <- wingR
-
-        verts
