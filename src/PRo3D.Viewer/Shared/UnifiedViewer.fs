@@ -363,6 +363,17 @@ module UnifiedViewer =
                 )
 
                 let cursorPos = AVal.init V3d.Zero
+
+                let cursorSphere =
+                    let isVisible = cursorPos |> AVal.map (fun p -> p <> V3d.Zero)
+                    Sg.sphere' 5 C4b.Cyan (sceneSize * 0.003)
+                    |> Sg.trafo (cursorPos |> AVal.map Trafo3d.Translation)
+                    |> Sg.shader {
+                        do! stableTrafo
+                        do! diffuseLighting
+                        do! SharedShaders.noPick
+                    }
+                    |> Sg.onOff isVisible
               
                 // Apply shaders to OPC scene
                 let opcSceneWithShaders =
@@ -452,11 +463,11 @@ module UnifiedViewer =
                     |> Sg.projTrafo (frustum |> AVal.map Frustum.projTrafo)
                     |> Sg.fillMode fillMode
 
-                // Combine geometry with overlays (orbit sphere is not affected by fillMode)
+                // Combine geometry with overlays (orbit sphere and cursor are not affected by fillMode)
                 let combinedScene =
                     geometryScene
                     |> Sg.andAlso (
-                        orbitCenterSphere
+                        Sg.ofList [ orbitCenterSphere; cursorSphere ]
                         |> Sg.viewTrafo (view |> AVal.map CameraView.viewTrafo)
                         |> Sg.projTrafo (frustum |> AVal.map Frustum.projTrafo)
                     )
@@ -494,6 +505,14 @@ module UnifiedViewer =
                                 let ndc = V3d(V2d(p.NormalizedPosition.X, 1.0 - p.NormalizedPosition.Y) * 2.0 - V2d.II, d * 2.0 - 1.0)
                                 let wp = viewProj.Backward.TransformPosProj(ndc)
                                 transact (fun _ -> cursorPos.Value <- wp)
+                    )
+
+                    // Left-click: print the currently hovered pick position
+                    win.Mouse.Down.Values.Add(fun btn ->
+                        if btn = MouseButtons.Left then
+                            let pos = cursorPos.Value
+                            if pos <> V3d.Zero then
+                                printfn "[PICK] world position: X=%.3f Y=%.3f Z=%.3f" pos.X pos.Y pos.Z
                     )
 
                 (combinedScene, buffer)
