@@ -30,20 +30,21 @@ module OpcRendering =
         let DistancesSym = Sym.ofString Distances
 
 
-    type PatchInfoTable() = 
+    type PatchInfoTable(?baseId : int) =
         // getting id's must be fast, resolving can be O(n)
+        let baseId = defaultArg baseId 0
         let c = ConcurrentDictionary<string, PatchFileInfo * int>()
-        member x.GetId (p : PatchFileInfo) = 
-            c.GetOrAdd(p.Name, fun _ -> 
-                p, c.Count
+        member x.GetId (p : PatchFileInfo) =
+            c.GetOrAdd(p.Name, fun _ ->
+                p, baseId + c.Count
             )
 
         member x.LookupLinear(id : int) : PatchFileInfo option =
-            c |> Seq.tryPick (fun kvp -> 
+            c |> Seq.tryPick (fun kvp ->
                 let (pfi, entryId) = kvp.Value
                 if entryId = id then
                     Some pfi
-                else 
+                else
                     None
             )
 

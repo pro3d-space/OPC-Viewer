@@ -63,7 +63,8 @@ module ViewerCommon =
 
     /// Create orbit camera controller with center point and sky direction
     /// Returns (cameraView, orbitCenter) where orbitCenter is adaptive for rendering
-    let inline createOrbitController (center : V3d) (sky : V3d) (initialView : CameraView) (speed : aval<float>) (win : ^a when ^a : (member Mouse : IMouse) and ^a : (member Keyboard : IKeyboard) and ^a : (member Time : aval<DateTime>)) : aval<CameraView> * aval<V3d> =
+    /// suppressScroll: when this returns true the mouse-wheel zoom is skipped (e.g. when Shift is held)
+    let inline createOrbitController (center : V3d) (sky : V3d) (initialView : CameraView) (speed : aval<float>) (suppressScroll: unit -> bool) (win : ^a when ^a : (member Mouse : IMouse) and ^a : (member Keyboard : IKeyboard) and ^a : (member Time : aval<DateTime>)) : aval<CameraView> * aval<V3d> =
         let mouse = (^a : (member Mouse : IMouse) win)
         let keyboard = (^a : (member Keyboard : IKeyboard) win)
 
@@ -90,13 +91,15 @@ module ViewerCommon =
         }
 
         // Handle mouse wheel for zoom (fixed 10% per tick, independent of speed)
+        // Zoom is skipped when suppressScroll() returns true (e.g. Shift is held for OPC alignment)
         mouse.Scroll.Values.Add(fun delta ->
-            transact (fun _ ->
-                let state = orbitState.Value
-                let zoomFactor = if delta > 0.0 then 0.9 else 1.1
-                let newDistance = state.Distance * zoomFactor |> max 0.1
-                orbitState.Value <- { state with Distance = newDistance }
-            )
+            if not (suppressScroll()) then
+                transact (fun _ ->
+                    let state = orbitState.Value
+                    let zoomFactor = if delta > 0.0 then 0.9 else 1.1
+                    let newDistance = state.Distance * zoomFactor |> max 0.1
+                    orbitState.Value <- { state with Distance = newDistance }
+                )
         )
 
         // Handle mouse drag for rotation, zoom, and pan

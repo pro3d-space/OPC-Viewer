@@ -85,16 +85,22 @@ module UnifiedViewer =
 
         let stableTrafo (v : Vertex) =
             vertex {
+                // Optional world-space translation for OPC alignment.
+                // Defaults to V3d.Zero when not set on a node (spheres, OBJ, etc.).
+                let translation : V3d = uniform?AlignmentTranslation
                 let vp = uniform.ModelViewTrafo * v.pos
                 let wp = uniform.ModelTrafo * v.pos
+                // Convert world-space translation to view space.
+                // For OPC data ModelTrafo is Identity, so ModelViewTrafo * dir = ViewTrafo * dir.
+                let tvp = (uniform.ModelViewTrafo * V4d(translation, 0.0)).XYZ
                 return {
-                    pos = uniform.ProjTrafo * vp
-                    wp = wp
-                    n = uniform.NormalMatrix * v.n
-                    b = uniform.NormalMatrix * v.b
-                    t = uniform.NormalMatrix * v.t
-                    c = v.c
-                    tc = v.tc
+                    pos = uniform.ProjTrafo * V4d(vp.XYZ + tvp, 1.0)
+                    wp  = V4d(wp.XYZ + translation, 1.0)
+                    n   = uniform.NormalMatrix * v.n
+                    b   = uniform.NormalMatrix * v.b
+                    t   = uniform.NormalMatrix * v.t
+                    c   = v.c
+                    tc  = v.tc
                 }
             }
 
@@ -238,6 +244,9 @@ module UnifiedViewer =
         // Mutable orbit controller - only initialized when first entering orbit mode
         let mutable currentOrbitController : (aval<CameraView> * aval<V3d>) option = None
 
+        // Tracks whether Shift is currently held — used to suppress camera scroll and enable OPC alignment scrolling
+        let mutable shiftHeld = false
+
         // Adaptive view using custom function to handle both dynamic controllers
         let view =
             AVal.custom (fun token ->
@@ -282,7 +291,7 @@ module UnifiedViewer =
 
                 transact (fun _ ->
                     savedOrbitDistance <- Some orbitDist
-                    currentOrbitController <- Some (ViewerCommon.createOrbitController newCenter config.sky currentView speed win)
+                    currentOrbitController <- Some (ViewerCommon.createOrbitController newCenter config.sky currentView speed (fun () -> shiftHeld) win)
                     cameraMode.Value <- Orbit
                 )
 
@@ -316,31 +325,55 @@ module UnifiedViewer =
             win.Keyboard.KeyDown(key).Values.Add(fun _ -> handler())
         )
 
+        // Track Shift key state — used to suppress camera scroll and enable OPC alignment scrolling
+        win.Keyboard.KeyDown(Keys.LeftShift).Values.Add(fun _  -> shiftHeld <- true)
+        win.Keyboard.KeyDown(Keys.RightShift).Values.Add(fun _ -> shiftHeld <- true)
+        win.Keyboard.KeyUp(Keys.LeftShift).Values.Add(fun _    -> shiftHeld <- false)
+        win.Keyboard.KeyUp(Keys.RightShift).Values.Add(fun _   -> shiftHeld <- false)
+
         // Create scene based on mode
         let (scene, offscreenBuffer) =
             match config.mode with
             | ViewMode viewConfig ->
                 // View mode implementation
-                let infoTable = View.OpcRendering.PatchInfoTable()
                 let pickIdSym = Sym.ofString "PickIds"
-                let framebufferSignature = 
+                let framebufferSignature =
                     runtime.CreateFramebufferSignature [
                         DefaultSemantic.Colors, TextureFormat.Rgba8
                         DefaultSemantic.DepthStencil, TextureFormat.Depth24Stencil8
                         pickIdSym, TextureFormat.R32i
                     ]
-                let hierarchies = 
-                    config.scene.patchHierarchies 
-                    |> Seq.toList 
-                    |> List.mapi (fun i basePath -> 
+
+                // One PatchInfoTable per OPC with non-overlapping ID ranges (100 000 IDs each).
+                // Allows identifying which OPC a pick ID belongs to at runtime.
+                let infoTables =
+                    config.scene.patchHierarchies
+                    |> Seq.mapi (fun i _ -> View.OpcRendering.PatchInfoTable(i * 100_000))
+                    |> Seq.toList
+
+                // Per-OPC world-space translation offset (driven by the A-key alignment).
+                let opcTranslations =
+                    config.scene.patchHierarchies
+                    |> Seq.map (fun _ -> AVal.init V3d.Zero)
+                    |> Seq.toList
+
+                let hierarchies =
+                    config.scene.patchHierarchies
+                    |> Seq.toList
+                    |> List.mapi (fun i basePath ->
                         let h = PatchHierarchy.load serializer.Pickle serializer.UnPickle (OpcPaths.OpcPaths basePath)
-                        let sg = View.OpcRendering.createSceneGraphCustom framebufferSignature runner infoTable basePath h
+                        let sg = View.OpcRendering.createSceneGraphCustom framebufferSignature runner infoTables.[i] basePath h
                         let trafo =
                             viewConfig.patchTrafos
                             |> List.tryItem i
                             |> Option.defaultValue Trafo3d.Identity
-                        if trafo = Trafo3d.Identity then sg :> ISg
-                        else sg |> Sg.trafo' trafo :> ISg
+                        // Expose per-OPC translation as a uniform so stableTrafo can apply it
+                        // without touching the OPC bounding-box / LoD system.
+                        let sgWithTrafo =
+                            if trafo = Trafo3d.Identity then sg :> ISg
+                            else sg |> Sg.trafo' trafo :> ISg
+                        sgWithTrafo
+                        |> Sg.uniform "AlignmentTranslation" opcTranslations.[i]
                     )
 
                 let opcVisibility =
@@ -362,7 +395,8 @@ module UnifiedViewer =
                             printfn "[OPC] all OPCs visible"
                 )
 
-                let cursorPos = AVal.init V3d.Zero
+                let cursorPos    = AVal.init V3d.Zero
+                let cursorOpcIdx = AVal.init -1   // index into infoTables / opcTranslations
 
                 let cursorSphere =
                     let isVisible = cursorPos |> AVal.map (fun p -> p <> V3d.Zero)
@@ -374,7 +408,27 @@ module UnifiedViewer =
                         do! SharedShaders.noPick
                     }
                     |> Sg.onOff isVisible
-              
+
+                // Two user-selected pick points (set with keys 1/2 while hovering)
+                let pickPoint1     = AVal.init V3d.NaN
+                let pickPoint2     = AVal.init V3d.NaN
+                let pickPoint1Opc  = AVal.init -1   // which OPC index point 1 landed on
+                let pickPoint2Opc  = AVal.init -1   // which OPC index point 2 landed on
+
+                let makePickSphere (color : C4b) (pos : cval<V3d>) =
+                    let isVisible = pos |> AVal.map (fun p -> not (Double.IsNaN p.X))
+                    Sg.sphere' 5 color (sceneSize * 0.004)
+                    |> Sg.trafo (pos |> AVal.map Trafo3d.Translation)
+                    |> Sg.shader {
+                        do! stableTrafo
+                        do! diffuseLighting
+                        do! SharedShaders.noPick
+                    }
+                    |> Sg.onOff isVisible
+
+                let pickSphere1 = makePickSphere C4b.Red   pickPoint1
+                let pickSphere2 = makePickSphere C4b.Green pickPoint2
+
                 // Apply shaders to OPC scene
                 let opcSceneWithShaders =
                     List.zip hierarchies opcVisibility
@@ -454,6 +508,74 @@ module UnifiedViewer =
                             { s with selectedIndex = idx })
                 )
 
+                // Pick point 1 (key 1) and pick point 2 (key 2) — only when cursor is on a surface
+                win.Keyboard.KeyDown(Keys.D1).Values.Add(fun _ ->
+                    let pos = cursorPos.Value
+                    let opc = cursorOpcIdx.Value
+                    if pos <> V3d.Zero && opc >= 0 then
+                        transact (fun _ -> pickPoint1.Value <- pos; pickPoint1Opc.Value <- opc)
+                        printfn "[PICK1] OPC %d  X=%.3f Y=%.3f Z=%.3f" opc pos.X pos.Y pos.Z
+                )
+                win.Keyboard.KeyDown(Keys.D2).Values.Add(fun _ ->
+                    let pos = cursorPos.Value
+                    let opc = cursorOpcIdx.Value
+                    if pos <> V3d.Zero && opc >= 0 then
+                        transact (fun _ -> pickPoint2.Value <- pos; pickPoint2Opc.Value <- opc)
+                        printfn "[PICK2] OPC %d  X=%.3f Y=%.3f Z=%.3f" opc pos.X pos.Y pos.Z
+                )
+
+                // A key: translate the OPC that pick point 2 is on so that both
+                // pick points lie in the same sky-normal plane.
+                win.Keyboard.KeyDown(Keys.A).Values.Add(fun _ ->
+                    let p1   = pickPoint1.Value
+                    let p2   = pickPoint2.Value
+                    let opc1 = pickPoint1Opc.Value
+                    let opc2 = pickPoint2Opc.Value
+                    if not (Double.IsNaN p1.X) && not (Double.IsNaN p2.X) && opc1 >= 0 && opc2 >= 0 then
+                        if opc1 = opc2 then
+                            printfn "[ALIGN] both points are on the same OPC (%d) — nothing to do" opc1
+                        else
+                            let sky   = Vec.normalize config.sky
+                            let h1    = Vec.dot p1 sky
+                            let h2    = Vec.dot p2 sky
+                            let delta = (h1 - h2) * sky   // world-space shift along up-vector
+                            // Accumulate the translation on OPC 2's offset cval
+                            let current = opcTranslations.[opc2].Value
+                            transact (fun _ ->
+                                opcTranslations.[opc2].Value <- current + delta
+                                // Move the marker sphere with the surface
+                                pickPoint2.Value <- p2 + delta
+                            )
+                            printfn "[ALIGN] OPC %d shifted %.3f along sky; total offset: X=%.3f Y=%.3f Z=%.3f"
+                                opc2 (h1 - h2)
+                                (current + delta).X (current + delta).Y (current + delta).Z
+                )
+
+                // Shift + MouseWheel: translate OPC2 along the connection line between point1 and point2.
+                // Camera zoom is suppressed (handled in createOrbitController via shiftHeld flag).
+                // Each scroll tick moves OPC2 by 1% of the scene diagonal towards or away from OPC1.
+                win.Mouse.Scroll.Values.Add(fun delta ->
+                    if shiftHeld then
+                        let p1   = pickPoint1.Value
+                        let p2   = pickPoint2.Value
+                        let opc1 = pickPoint1Opc.Value
+                        let opc2 = pickPoint2Opc.Value
+                        if not (Double.IsNaN p1.X) && not (Double.IsNaN p2.X) && opc1 >= 0 && opc2 >= 0 && opc1 <> opc2 then
+                            // Direction from point2 to point1 (positive scroll = move OPC2 towards OPC1)
+                            let connectionDir = Vec.normalize (p1 - p2)
+                            let step = (p2 - p1).Length * 0.1 * (if delta > 0.0 then 1.0 else -1.0)
+                            let translation = connectionDir * step
+                            let current = opcTranslations.[opc2].Value
+                            transact (fun _ ->
+                                opcTranslations.[opc2].Value <- current + translation
+                                // Move the marker sphere with the surface
+                                pickPoint2.Value <- p2 + translation
+                            )
+                            printfn "[SCROLL-ALIGN] OPC %d step %.4f along connection line; total offset: X=%.3f Y=%.3f Z=%.3f"
+                                opc2 step
+                                (current + translation).X (current + translation).Y (current + translation).Z
+                )
+
                 // Separate geometry (affected by wireframe) from overlays (always solid)
                 let geometryScene =
                     opcSceneWithShaders
@@ -467,10 +589,14 @@ module UnifiedViewer =
                 let combinedScene =
                     geometryScene
                     |> Sg.andAlso (
-                        Sg.ofList [ orbitCenterSphere; cursorSphere ]
+                        Sg.ofList [ orbitCenterSphere; cursorSphere; pickSphere1; pickSphere2 ]
                         |> Sg.viewTrafo (view |> AVal.map CameraView.viewTrafo)
                         |> Sg.projTrafo (frustum |> AVal.map Frustum.projTrafo)
                     )
+                    // Provide a zero default so nodes without an explicit per-OPC
+                    // AlignmentTranslation (OBJ scene, overlay spheres) don't produce
+                    // "Could not find uniform" warnings.  Per-OPC inner uniforms override this.
+                    |> Sg.uniform "AlignmentTranslation" (AVal.constant V3d.Zero)
 
                 // Create offscreen buffer for view mode
                 let buffer = 
@@ -494,17 +620,20 @@ module UnifiedViewer =
                             let depth = renderedDepth.DownloadDepth(region = region)
 
                             let pickIds = runtime.Download(buffer.[pickIdSym].GetValue(), region = region) |> unbox<PixImage<int32>>
-                            let pickId = pickIds.GetChannel(0L)[0,0]
-                            let object = infoTable.LookupLinear(pickId)
+                            let pickId  = pickIds.GetChannel(0L)[0,0]
+                            // Find which OPC this pick ID belongs to
+                            let opcIdx  =
+                                infoTables |> List.tryFindIndex (fun t -> t.LookupLinear(pickId).IsSome)
 
-                            match object with
-                            | None -> ()
-                            | Some object ->
+                            match opcIdx with
+                            | None ->
+                                transact (fun _ -> cursorPos.Value <- V3d.Zero; cursorOpcIdx.Value <- -1)
+                            | Some idx ->
                                 let d = depth[0,0] |> float
                                 let viewProj = CameraView.viewTrafo view * Frustum.projTrafo frustum
                                 let ndc = V3d(V2d(p.NormalizedPosition.X, 1.0 - p.NormalizedPosition.Y) * 2.0 - V2d.II, d * 2.0 - 1.0)
                                 let wp = viewProj.Backward.TransformPosProj(ndc)
-                                transact (fun _ -> cursorPos.Value <- wp)
+                                transact (fun _ -> cursorPos.Value <- wp; cursorOpcIdx.Value <- idx)
                     )
 
                     // Left-click: print the currently hovered pick position
