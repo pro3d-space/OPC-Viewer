@@ -415,10 +415,17 @@ module UnifiedViewer =
                 let pickPoint1Opc  = AVal.init -1   // which OPC index point 1 landed on
                 let pickPoint2Opc  = AVal.init -1   // which OPC index point 2 landed on
 
-                let makePickSphere (color : C4b) (pos : cval<V3d>) =
+                let makePickSphere (color : C4b) (pos : cval<V3d>) (opcIdx : cval<int>) =
                     let isVisible = pos |> AVal.map (fun p -> not (Double.IsNaN p.X))
+                    // Look up the translation for the OPC this point belongs to.
+                    // When opcIdx is -1 (not yet picked) we use zero.
+                    let translation =
+                        opcIdx |> AVal.bind (fun i ->
+                            if i < 0 || i >= opcTranslations.Length then AVal.constant V3d.Zero
+                            else opcTranslations.[i] :> aval<V3d>)
                     Sg.sphere' 5 color (sceneSize * 0.004)
                     |> Sg.trafo (pos |> AVal.map Trafo3d.Translation)
+                    |> Sg.uniform "AlignmentTranslation" translation
                     |> Sg.shader {
                         do! stableTrafo
                         do! diffuseLighting
@@ -426,8 +433,8 @@ module UnifiedViewer =
                     }
                     |> Sg.onOff isVisible
 
-                let pickSphere1 = makePickSphere C4b.Red   pickPoint1
-                let pickSphere2 = makePickSphere C4b.Green pickPoint2
+                let pickSphere1 = makePickSphere C4b.Red   pickPoint1 pickPoint1Opc
+                let pickSphere2 = makePickSphere C4b.Green pickPoint2 pickPoint2Opc
 
                 // Apply shaders to OPC scene
                 let opcSceneWithShaders =
@@ -544,7 +551,7 @@ module UnifiedViewer =
                             transact (fun _ ->
                                 opcTranslations.[opc2].Value <- current + delta
                                 // Move the marker sphere with the surface
-                                pickPoint2.Value <- p2 + delta
+                                //pickPoint2.Value <- p2 + delta
                             )
                             printfn "[ALIGN] OPC %d shifted %.3f along sky; total offset: X=%.3f Y=%.3f Z=%.3f"
                                 opc2 (h1 - h2)
@@ -562,14 +569,16 @@ module UnifiedViewer =
                         let opc2 = pickPoint2Opc.Value
                         if not (Double.IsNaN p1.X) && not (Double.IsNaN p2.X) && opc1 >= 0 && opc2 >= 0 && opc1 <> opc2 then
                             // Direction from point2 to point1 (positive scroll = move OPC2 towards OPC1)
-                            let connectionDir = Vec.normalize (p1 - p2)
-                            let step = (p2 - p1).Length * 0.1 * (if delta > 0.0 then 1.0 else -1.0)
+                            let translatedP1 = p1 + opcTranslations.[opc1].Value
+                            let translatedP2 = p2 + opcTranslations.[opc2].Value
+                            let connectionDir = Vec.normalize (translatedP1 - translatedP2)
+                            let step = (translatedP2 - translatedP1).Length * 0.1 * (if delta > 0.0 then 1.0 else -1.0)
                             let translation = connectionDir * step
                             let current = opcTranslations.[opc2].Value
                             transact (fun _ ->
                                 opcTranslations.[opc2].Value <- current + translation
                                 // Move the marker sphere with the surface
-                                pickPoint2.Value <- p2 + translation
+                                //pickPoint2.Value <- p2 + translation
                             )
                             printfn "[SCROLL-ALIGN] OPC %d step %.4f along connection line; total offset: X=%.3f Y=%.3f Z=%.3f"
                                 opc2 step
