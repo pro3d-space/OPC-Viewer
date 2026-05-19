@@ -301,11 +301,9 @@ module ViewCommand =
                 | Result.Error err ->
                     printfn "[RIBBON ERROR] %s" err
                     RibbonState.defaultState
-                | Result.Ok features ->
-                    let allPolylines =
-                        features |> Array.map (fun (_, pts) -> pts) 
+                | Result.Ok polylines ->
                     { RibbonState.defaultState with
-                        allPolylines  = allPolylines
+                        allPolylines  = polylines
                         selectedIndex = 0
                         halfWidth     = halfWidth
                         showPolyline  = true }

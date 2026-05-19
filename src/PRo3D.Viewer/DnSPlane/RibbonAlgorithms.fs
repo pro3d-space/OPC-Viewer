@@ -268,3 +268,59 @@ module RibbonAlgorithms =
             indices.[k + 5] <- v + 3
 
         centers, dips, sides, indices
+
+    // ── DnS plane fitting ────────────────────────────────────────────────────
+
+    /// Fit a plane through all points from selected polylines using
+    /// LinearRegression3d.  Returns None when fewer than 3 points are selected.
+    /// The returned DnSPlane is immediately visible with a size equal to the
+    /// maximum in-plane distance from the centre of mass — just enough to cover
+    /// the selected point cloud.
+    let computeDnSPlane (up : V3d) (polylines : Polyline[]) : DnSPlane option =
+        let selectedPoints =
+            polylines
+            |> Array.filter  (fun p -> p.isSelected)
+            |> Array.collect (fun p -> p.points)
+
+        if selectedPoints.Length < 3 then None
+        else
+            let plane = fitPlane up selectedPoints
+
+            let centerOfMass =
+                (selectedPoints |> Array.fold (+) V3d.Zero) / float selectedPoints.Length
+
+            let planeNormal =
+                match signedOrientation up plane with
+                | -1 -> -plane.Normal
+                | _  ->  plane.Normal
+
+            let eps = 1e-6
+            let strikeRaw = Vec.cross up planeNormal
+            let strike =
+                if strikeRaw.Length < eps then
+                    let fallback = Vec.cross up V3d.XAxis
+                    if fallback.Length < eps then V3d.ZAxis.Normalized
+                    else fallback.Normalized
+                else
+                    strikeRaw.Normalized
+
+            let dipRaw = Vec.cross strike planeNormal
+            let dip =
+                if dipRaw.Length < eps then V3d.XAxis
+                else dipRaw.Normalized
+
+            let defaultSize =
+                selectedPoints
+                |> Array.map (fun p ->
+                    let v = p - centerOfMass
+                    (v - Vec.dot v planeNormal * planeNormal).Length)
+                |> Array.max
+
+            Some {
+                isVisible       = true
+                size            = defaultSize
+                dipDirection    = dip
+                strikeDirection = strike
+                plane           = Plane3d(planeNormal, centerOfMass)
+                centerOfMass    = centerOfMass
+            }

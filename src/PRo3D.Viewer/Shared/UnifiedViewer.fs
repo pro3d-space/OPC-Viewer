@@ -85,16 +85,14 @@ module UnifiedViewer =
 
         let stableTrafo (v : Vertex) =
             vertex {
-                // Optional world-space translation for OPC alignment.
-                // Defaults to V3d.Zero when not set on a node (spheres, OBJ, etc.).
-                let translation : V3d = uniform?AlignmentTranslation
                 let vp = uniform.ModelViewTrafo * v.pos
                 let wp = uniform.ModelTrafo * v.pos
-                // Convert world-space translation to view space.
-                // For OPC data ModelTrafo is Identity, so ModelViewTrafo * dir = ViewTrafo * dir.
-                let tvp = (uniform.ModelViewTrafo * V4d(translation, 0.0)).XYZ
+
+                let translation : V3d = uniform?AlignmentTranslation
+                let tvp = uniform.ViewTrafo * V4d(translation, 0.0)
+
                 return {
-                    pos = uniform.ProjTrafo * V4d(vp.XYZ + tvp, 1.0)
+                    pos = uniform.ProjTrafo * (vp + tvp)
                     wp  = V4d(wp.XYZ + translation, 1.0)
                     n   = uniform.NormalMatrix * v.n
                     b   = uniform.NormalMatrix * v.b
@@ -415,17 +413,12 @@ module UnifiedViewer =
                 let pickPoint1Opc  = AVal.init -1   // which OPC index point 1 landed on
                 let pickPoint2Opc  = AVal.init -1   // which OPC index point 2 landed on
 
-                let makePickSphere (color : C4b) (pos : cval<V3d>) (opcIdx : cval<int>) =
+                let makePickSphere (color : C4b) (pos : cval<V3d>) =
                     let isVisible = pos |> AVal.map (fun p -> not (Double.IsNaN p.X))
-                    // Look up the translation for the OPC this point belongs to.
-                    // When opcIdx is -1 (not yet picked) we use zero.
-                    let translation =
-                        opcIdx |> AVal.bind (fun i ->
-                            if i < 0 || i >= opcTranslations.Length then AVal.constant V3d.Zero
-                            else opcTranslations.[i] :> aval<V3d>)
+                    // pos already contains the translated world position (depth-unprojected
+                    // from stableTrafo output), so AlignmentTranslation must be zero here.
                     Sg.sphere' 5 color (sceneSize * 0.004)
                     |> Sg.trafo (pos |> AVal.map Trafo3d.Translation)
-                    |> Sg.uniform "AlignmentTranslation" translation
                     |> Sg.shader {
                         do! stableTrafo
                         do! diffuseLighting
@@ -433,8 +426,8 @@ module UnifiedViewer =
                     }
                     |> Sg.onOff isVisible
 
-                let pickSphere1 = makePickSphere C4b.Red   pickPoint1 pickPoint1Opc
-                let pickSphere2 = makePickSphere C4b.Green pickPoint2 pickPoint2Opc
+                let pickSphere1 = makePickSphere C4b.Red   pickPoint1
+                let pickSphere2 = makePickSphere C4b.Green pickPoint2
 
                 // Apply shaders to OPC scene
                 let opcSceneWithShaders =
@@ -485,10 +478,38 @@ module UnifiedViewer =
                     transact (fun _ -> ribbonState.Value <- f ribbonState.Value)
 
                 win.Keyboard.KeyDown(Keys.OemPlus).Values.Add(fun _ ->
-                    modifyRibbon (fun s -> { s with halfWidth = min 500.0 (s.halfWidth * 1.25) })
+                    if shiftHeld then
+                        modifyRibbon (fun s ->
+                            match s.dnSPlane with
+                            | None -> s
+                            | Some p -> { s with dnSPlane = Some { p with size = min 100000.0 (p.size * 1.25) } })
+                    else
+                        modifyRibbon (fun s -> { s with halfWidth = min 500.0 (s.halfWidth * 1.25) })
                 )
                 win.Keyboard.KeyDown(Keys.OemMinus).Values.Add(fun _ ->
-                    modifyRibbon (fun s -> { s with halfWidth = max 0.1 (s.halfWidth / 1.25) })
+                    if shiftHeld then
+                        modifyRibbon (fun s ->
+                            match s.dnSPlane with
+                            | None -> s
+                            | Some p -> { s with dnSPlane = Some { p with size = max 0.01 (p.size / 1.25) } })
+                    else
+                        modifyRibbon (fun s -> { s with halfWidth = max 0.1 (s.halfWidth / 1.25) })
+                )
+                win.Keyboard.KeyDown(Keys.P).Values.Add(fun _ ->
+                    modifyRibbon (fun s ->
+                        match s.dnSPlane with
+                        | Some plane ->
+                            { s with dnSPlane = Some { plane with isVisible = not plane.isVisible } }
+                        | None ->
+                            match RibbonAlgorithms.computeDnSPlane V3d.YAxis s.allPolylines with
+                            | None ->
+                                printfn "[DnS] no selected polylines with >= 3 points"
+                                s
+                            | Some plane ->
+                                printfn "[DnS] plane fitted: normal %A  centre %A  radius %.3f"
+                                    plane.plane.Normal plane.centerOfMass plane.size
+                                { s with dnSPlane = Some plane }
+                    )
                 )
                 win.Keyboard.KeyDown(Keys.Down).Values.Add(fun _ ->
                     modifyRibbon (fun s -> { s with neighborCount = max 0 (s.neighborCount - 1); useAllPoints = false })
@@ -550,8 +571,7 @@ module UnifiedViewer =
                             let current = opcTranslations.[opc2].Value
                             transact (fun _ ->
                                 opcTranslations.[opc2].Value <- current + delta
-                                // Move the marker sphere with the surface
-                                //pickPoint2.Value <- p2 + delta
+                                pickPoint2.Value <- p2 + delta
                             )
                             printfn "[ALIGN] OPC %d shifted %.3f along sky; total offset: X=%.3f Y=%.3f Z=%.3f"
                                 opc2 (h1 - h2)
@@ -568,22 +588,81 @@ module UnifiedViewer =
                         let opc1 = pickPoint1Opc.Value
                         let opc2 = pickPoint2Opc.Value
                         if not (Double.IsNaN p1.X) && not (Double.IsNaN p2.X) && opc1 >= 0 && opc2 >= 0 && opc1 <> opc2 then
-                            // Direction from point2 to point1 (positive scroll = move OPC2 towards OPC1)
-                            let translatedP1 = p1 + opcTranslations.[opc1].Value
-                            let translatedP2 = p2 + opcTranslations.[opc2].Value
-                            let connectionDir = Vec.normalize (translatedP1 - translatedP2)
-                            let step = (translatedP2 - translatedP1).Length * 0.1 * (if delta > 0.0 then 1.0 else -1.0)
+                            // p1 and p2 are depth-unprojected from the stableTrafo output, so they
+                            // already include each OPC's current AlignmentTranslation — no extra offset needed.
+                            let connectionDir = Vec.normalize (p1 - p2)
+                            let step = (p1 - p2).Length * 0.1 * (if delta > 0.0 then 1.0 else -1.0)
                             let translation = connectionDir * step
                             let current = opcTranslations.[opc2].Value
                             transact (fun _ ->
                                 opcTranslations.[opc2].Value <- current + translation
-                                // Move the marker sphere with the surface
-                                //pickPoint2.Value <- p2 + translation
+                                pickPoint2.Value <- p2 + translation
                             )
                             printfn "[SCROLL-ALIGN] OPC %d step %.4f along connection line; total offset: X=%.3f Y=%.3f Z=%.3f"
                                 opc2 step
                                 (current + translation).X (current + translation).Y (current + translation).Z
                 )
+
+                // Arrow helper: line shaft + cone head, all in world space (AlignmentTranslation = zero).
+                let makeArrow (origin : V3d) (dir : V3d) (len : float) (color : C4b) : ISg =
+                    let coneH  = len * 0.15
+                    let coneR  = coneH * 0.4
+                    let tip    = origin + dir * len
+                    let shaftEnd = tip - dir * coneH
+
+                    let shaftSg =
+                        IndexedGeometry(
+                            Mode = IndexedGeometryMode.LineList,
+                            IndexedAttributes =
+                                SymDict.ofList [
+                                    DefaultSemantic.Positions,
+                                        [| V3f origin; V3f shaftEnd |] :> System.Array
+                                ]
+                        )
+                        |> Sg.ofIndexedGeometry
+                        |> Sg.shader {
+                            do! stableTrafo
+                            do! DefaultSurfaces.constantColor (C4f color)
+                            do! SharedShaders.noPick
+                        }
+
+                    let coneSg =
+                        Sg.cone' 16 color coneR coneH
+                        |> Sg.trafo' (
+                            Trafo3d.Translation(tip - dir * coneH) *
+                            Trafo3d.RotateInto(V3d.ZAxis, dir))
+                        |> Sg.shader {
+                            do! stableTrafo
+                            do! diffuseLighting
+                            do! SharedShaders.noPick
+                        }
+
+                    Sg.ofList [shaftSg; coneSg]
+
+                // A-key arrow: from pickPoint2 along the sky direction, length = height offset.
+                // Reacts to changes in either pick point and disappears when heights match.
+                let alignArrowSg =
+                    (pickPoint1, pickPoint2) ||> AVal.map2 (fun p1 p2 ->
+                        if Double.IsNaN p1.X || Double.IsNaN p2.X then Sg.ofList [] :> ISg
+                        else
+                            let sky   = Vec.normalize config.sky
+                            let delta = (Vec.dot p1 sky - Vec.dot p2 sky) * sky
+                            if delta.Length < 1e-6 then Sg.ofList [] :> ISg
+                            else makeArrow p2 delta.Normalized delta.Length C4b.Yellow :> ISg
+                    )
+                    |> Sg.dynamic
+
+                // Scroll arrow: from pickPoint2 toward pickPoint1, length = distance between them.
+                // Reacts to pick point changes so it updates live as OPC2 moves.
+                let scrollArrowSg =
+                    (pickPoint1, pickPoint2) ||> AVal.map2 (fun p1 p2 ->
+                        if Double.IsNaN p1.X || Double.IsNaN p2.X then Sg.ofList [] :> ISg
+                        else
+                            let diff = p1 - p2
+                            if diff.Length < 1e-6 then Sg.ofList [] :> ISg
+                            else makeArrow p2 diff.Normalized diff.Length C4b.Cyan :> ISg
+                    )
+                    |> Sg.dynamic
 
                 // Separate geometry (affected by wireframe) from overlays (always solid)
                 let geometryScene =
@@ -598,7 +677,7 @@ module UnifiedViewer =
                 let combinedScene =
                     geometryScene
                     |> Sg.andAlso (
-                        Sg.ofList [ orbitCenterSphere; cursorSphere; pickSphere1; pickSphere2 ]
+                        Sg.ofList [ orbitCenterSphere; cursorSphere; pickSphere1; pickSphere2; alignArrowSg; scrollArrowSg ]
                         |> Sg.viewTrafo (view |> AVal.map CameraView.viewTrafo)
                         |> Sg.projTrafo (frustum |> AVal.map Frustum.projTrafo)
                     )

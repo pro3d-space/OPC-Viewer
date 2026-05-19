@@ -28,8 +28,9 @@ module GeoJson =
             if pts.Length < 2 then None else Some pts
 
     /// Parse all LineString features from a GeoJSON file.
-    /// Returns an array of (name, points) pairs — one per LineString.
-    let tryParseAllLineStrings (path : string) : Result<(string * V3d[]) array, string> =
+    /// Returns an array of Polyline values — one per LineString.
+    /// The `isSelected` flag is read from each feature's properties object.
+    let tryParseAllLineStrings (path : string) : Result<Polyline array, string> =
         try
             if not (File.Exists path) then
                 Result.Error (sprintf "File not found: %s" path)
@@ -37,7 +38,7 @@ module GeoJson =
                 let json    = File.ReadAllText path
                 let doc     = JsonDocument.Parse json
                 let root    = doc.RootElement
-                let results = System.Collections.Generic.List<string * V3d[]>()
+                let results = System.Collections.Generic.List<Polyline>()
                 let mutable idx = 0
 
                 let mutable featuresEl = Unchecked.defaultof<JsonElement>
@@ -51,22 +52,29 @@ module GeoJson =
                         if feat.TryGetProperty("geometry", &geomEl) &&
                            geomEl.TryGetProperty("type", &tEl) &&
                            tEl.GetString() = "LineString" then
-                            // Try to get name from properties
                             let mutable propsEl = Unchecked.defaultof<JsonElement>
                             let mutable nameEl  = Unchecked.defaultof<JsonElement>
+                            let mutable selEl   = Unchecked.defaultof<JsonElement>
+                            let hasProps = feat.TryGetProperty("properties", &propsEl)
                             let name =
-                                if feat.TryGetProperty("properties", &propsEl) &&
+                                if hasProps &&
                                    propsEl.TryGetProperty("name", &nameEl) &&
                                    nameEl.ValueKind = JsonValueKind.String
                                 then nameEl.GetString()
                                 else sprintf "Feature %d" idx
+                            let isSelected =
+                                hasProps &&
+                                propsEl.TryGetProperty("isSelected", &selEl) &&
+                                selEl.ValueKind = JsonValueKind.True
                             match extractPoints geomEl with
-                            | Some pts -> results.Add(name, pts); idx <- idx + 1
-                            | None     -> ()
+                            | Some pts ->
+                                results.Add({ name = name; points = pts; isSelected = isSelected })
+                                idx <- idx + 1
+                            | None -> ()
                 elif root.TryGetProperty("type", &typeEl) && typeEl.GetString() = "LineString" then
                     // Bare LineString geometry
                     match extractPoints root with
-                    | Some pts -> results.Add("Feature 0", pts)
+                    | Some pts -> results.Add({ name = "Feature 0"; points = pts; isSelected = false })
                     | None     -> ()
 
                 if results.Count = 0 then
@@ -78,7 +86,7 @@ module GeoJson =
 
     /// Convenience: parse only the first LineString (backward compat).
     let tryParseLineString (path : string) : Result<V3d[], string> =
-        tryParseAllLineStrings path |> Result.map (fun arr -> snd arr.[0])
+        tryParseAllLineStrings path |> Result.map (fun arr -> arr.[0].points)
 
 
 /// Scene graph builders.
@@ -166,6 +174,45 @@ module RibbonScene =
 
             Sg.andAlso ribbonOutlines ribbonFill
 
+    /// Semi-transparent blue disk visualising the fitted DnS plane.
+    /// The disk lies in the plane spanned by strike and dip, centred on the
+    /// centre of mass of the selected polylines.
+    let private dnsPlaneSg (plane : DnSPlane) : ISg =
+        let n      = 64
+        let center = plane.centerOfMass
+        let radius = plane.size
+        let axis1  = plane.strikeDirection
+        let axis2  = plane.dipDirection
+        let twoPi  = 2.0 * System.Math.PI
+
+        let positions = Array.zeroCreate<V3f> (n + 1)
+        positions.[0] <- V3f center
+        for i in 0 .. n - 1 do
+            let theta = float i / float n * twoPi
+            positions.[i + 1] <- V3f (center + radius * (cos theta * axis1 + sin theta * axis2))
+
+        let indices = Array.zeroCreate<int> (n * 3)
+        for i in 0 .. n - 1 do
+            indices.[i * 3 + 0] <- 0
+            indices.[i * 3 + 1] <- i + 1
+            indices.[i * 3 + 2] <- (i + 1) % n + 1
+
+        IndexedGeometry(
+            Mode       = IndexedGeometryMode.TriangleList,
+            IndexArray = (indices :> System.Array),
+            IndexedAttributes =
+                SymDict.ofList [
+                    DefaultSemantic.Positions, positions :> System.Array
+                ]
+        )
+        |> Sg.ofIndexedGeometry
+        |> Sg.shader {
+            do! DefaultSurfaces.stableTrafo
+            do! DefaultSurfaces.constantColor (C4f(0.3f, 0.6f, 0.9f, 1.0f))
+            do! SharedShaders.noPick
+        }
+        |> Sg.cullMode' CullMode.None
+
     /// Red polyline along the control points.
     let private polylineSg (points : V3d[]) : ISg =
         if points.Length < 2 then Sg.ofList []
@@ -192,23 +239,27 @@ module RibbonScene =
     /// Build the scene graph for the currently selected polyline in RibbonState.
     let build (state : RibbonState) (transform : Trafo3d option) : ISg =
         let pts = RibbonState.currentPoints state
-        if pts.Length < 2 then Sg.ofList []
-        else
-            // Pre-apply the optional transform in world space so no child
-            // Sg node ever sees a double-transform.
-            let worldPts =
-                match transform with
-                | None   -> pts
-                | Some t -> pts |> Array.map (fun p -> t.Forward.TransformPos p)
 
-            let frames =
-                RibbonAlgorithms.computeSegmentFrames
-                    up state.useAllPoints state.neighborCount worldPts
+        let ribbonParts =
+            if pts.Length < 2 then []
+            else
+                // Pre-apply the optional transform in world space so no child
+                // Sg node ever sees a double-transform.
+                let worldPts =
+                    match transform with
+                    | None   -> pts
+                    | Some t -> pts |> Array.map (fun p -> t.Forward.TransformPos p)
 
-            let arrowLength = max 0.5 (state.halfWidth * 0.8)
+                let frames =
+                    RibbonAlgorithms.computeSegmentFrames
+                        up state.useAllPoints state.neighborCount worldPts
 
-            let parts =
                 [   yield ribbonSg frames state.halfWidth
                     if state.showPolyline then yield polylineSg worldPts ]
 
-            Sg.ofList parts   // no Sg.trafo' — already baked in
+        let dnsParts =
+            match state.dnSPlane with
+            | Some plane when plane.isVisible -> [dnsPlaneSg plane]
+            | _ -> []
+
+        Sg.ofList (ribbonParts @ dnsParts)   // no Sg.trafo' — already baked in
