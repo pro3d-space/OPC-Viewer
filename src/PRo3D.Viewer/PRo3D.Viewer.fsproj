@@ -11,10 +11,13 @@
     <Compile Include="Shared\SharedShaders.fs" />
     <Compile Include="Shared\ViewerCommon.fs" />
     <Compile Include="DnSPlane\RegressionInfo.fs" />
-	<Compile Include="DnSPlane/RibbonTypes.fs" />
-	<Compile Include="DnSPlane/RibbonAlgorithms.fs" />
-	<Compile Include="DnSPlane/RibbonShaders.fs" />
-	<Compile Include="DnSPlane/RibbonScene.fs" />
+    <Compile Include="DnSPlane\DnsTypes.fs" />
+    <Compile Include="DnSPlane\RibbonTypes.fs" />
+    <Compile Include="DnSPlane\DnsAlgorithms.fs" />
+    <Compile Include="DnSPlane\RibbonAlgorithms.fs" />
+    <Compile Include="DnSPlane\RibbonShaders.fs" />
+    <Compile Include="DnSPlane\DnsScene.fs" />
+    <Compile Include="DnSPlane\RibbonScene.fs" />
     <Compile Include="Utils.fs" />
     <Compile Include="Data.fs" />
     <Compile Include="Diff\DiffInfo.fs" />

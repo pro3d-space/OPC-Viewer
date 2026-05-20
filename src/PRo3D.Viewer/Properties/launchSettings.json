@@ -21,7 +21,7 @@
     },
     "project with ribbon": {
       "commandName": "Project",
-      "commandLineArgs": "project C:/Users/sophiechen/Documents/WORK/VRVis/PRo3D/OPC-Viewer/config.json"
+      "commandLineArgs": "project C:/Users/pichler/Documents/Code/PRo3D/OPC-Viewer_H1/OPC-Viewer/config.json"
     }
   }
 }

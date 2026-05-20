@@ -174,45 +174,6 @@ module RibbonScene =
 
             Sg.andAlso ribbonOutlines ribbonFill
 
-    /// Semi-transparent blue disk visualising the fitted DnS plane.
-    /// The disk lies in the plane spanned by strike and dip, centred on the
-    /// centre of mass of the selected polylines.
-    let private dnsPlaneSg (plane : DnSPlane) : ISg =
-        let n      = 64
-        let center = plane.centerOfMass
-        let radius = plane.size
-        let axis1  = plane.strikeDirection
-        let axis2  = plane.dipDirection
-        let twoPi  = 2.0 * System.Math.PI
-
-        let positions = Array.zeroCreate<V3f> (n + 1)
-        positions.[0] <- V3f center
-        for i in 0 .. n - 1 do
-            let theta = float i / float n * twoPi
-            positions.[i + 1] <- V3f (center + radius * (cos theta * axis1 + sin theta * axis2))
-
-        let indices = Array.zeroCreate<int> (n * 3)
-        for i in 0 .. n - 1 do
-            indices.[i * 3 + 0] <- 0
-            indices.[i * 3 + 1] <- i + 1
-            indices.[i * 3 + 2] <- (i + 1) % n + 1
-
-        IndexedGeometry(
-            Mode       = IndexedGeometryMode.TriangleList,
-            IndexArray = (indices :> System.Array),
-            IndexedAttributes =
-                SymDict.ofList [
-                    DefaultSemantic.Positions, positions :> System.Array
-                ]
-        )
-        |> Sg.ofIndexedGeometry
-        |> Sg.shader {
-            do! DefaultSurfaces.stableTrafo
-            do! DefaultSurfaces.constantColor (C4f(0.3f, 0.6f, 0.9f, 1.0f))
-            do! SharedShaders.noPick
-        }
-        |> Sg.cullMode' CullMode.None
-
     /// Red polyline along the control points.
     let private polylineSg (points : V3d[]) : ISg =
         if points.Length < 2 then Sg.ofList []
@@ -259,7 +220,7 @@ module RibbonScene =
 
         let dnsParts =
             match state.dnSPlane with
-            | Some plane when plane.isVisible -> [dnsPlaneSg plane]
+            | Some plane when plane.isVisible -> [DnsScene.planeSg plane]
             | _ -> []
 
         Sg.ofList (ribbonParts @ dnsParts)   // no Sg.trafo' — already baked in

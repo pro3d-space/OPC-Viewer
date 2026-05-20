@@ -1,25 +1,14 @@
 namespace PRo3D.Viewer.Ribbon
 
 open Aardvark.Base
-open Aardvark.UI.Primitives
 open Aardvark.Rendering
-
+open Aardvark.UI.Primitives
 
 type Polyline =
     {
         name       : string
         points     : V3d[]
         isSelected : bool
-    }
-
-type DnSPlane =
-    {
-        isVisible       : bool
-        size            : float
-        dipDirection    : V3d
-        strikeDirection : V3d
-        plane           : Plane3d
-        centerOfMass    : V3d
     }
 
 /// Runtime state for a single ribbon overlay on the OPC viewer.

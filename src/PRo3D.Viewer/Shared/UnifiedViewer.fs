@@ -412,6 +412,9 @@ module UnifiedViewer =
                 let pickPoint2     = AVal.init V3d.NaN
                 let pickPoint1Opc  = AVal.init -1   // which OPC index point 1 landed on
                 let pickPoint2Opc  = AVal.init -1   // which OPC index point 2 landed on
+                // OPC-local position of pickpoint2 (i.e. pickpoint2 world pos minus OPC2 translation at click time).
+                // Used as the "original" p2 for triangle visualizations, independent of accumulated alignment.
+                let originalPickPoint2 = AVal.init V3d.NaN
 
                 let makePickSphere (color : C4b) (pos : cval<V3d>) =
                     let isVisible = pos |> AVal.map (fun p -> not (Double.IsNaN p.X))
@@ -501,7 +504,7 @@ module UnifiedViewer =
                         | Some plane ->
                             { s with dnSPlane = Some { plane with isVisible = not plane.isVisible } }
                         | None ->
-                            match RibbonAlgorithms.computeDnSPlane V3d.YAxis s.allPolylines with
+                            match DnsAlgorithms.computeDnSPlane V3d.YAxis s.allPolylines with
                             | None ->
                                 printfn "[DnS] no selected polylines with >= 3 points"
                                 s
@@ -548,7 +551,11 @@ module UnifiedViewer =
                     let pos = cursorPos.Value
                     let opc = cursorOpcIdx.Value
                     if pos <> V3d.Zero && opc >= 0 then
-                        transact (fun _ -> pickPoint2.Value <- pos; pickPoint2Opc.Value <- opc)
+                        transact (fun _ ->
+                            pickPoint2.Value <- pos
+                            pickPoint2Opc.Value <- opc
+                            originalPickPoint2.Value <- pos - opcTranslations.[opc].Value
+                        )
                         printfn "[PICK2] OPC %d  X=%.3f Y=%.3f Z=%.3f" opc pos.X pos.Y pos.Z
                 )
 
@@ -578,6 +585,39 @@ module UnifiedViewer =
                                 (current + delta).X (current + delta).Y (current + delta).Z
                 )
 
+                // B key: translate OPC2 along sky so that pickpoint2 lands on the DnS plane.
+                win.Keyboard.KeyDown(Keys.B).Values.Add(fun _ ->
+                    let p1   = pickPoint1.Value
+                    let p2   = pickPoint2.Value
+                    let opc1 = pickPoint1Opc.Value
+                    let opc2 = pickPoint2Opc.Value
+                    if not (Double.IsNaN p1.X) && not (Double.IsNaN p2.X) && opc1 >= 0 && opc2 >= 0 then
+                        if opc1 = opc2 then
+                            printfn "[DNS-ALIGN] both points on same OPC — nothing to do"
+                        else
+                            match ribbonState.Value.dnSPlane with
+                            | None ->
+                                printfn "[DNS-ALIGN] no DnS plane fitted yet — press P first"
+                            | Some plane ->
+                                let sky   = Vec.normalize config.sky
+                                let n     = plane.plane.Normal
+                                let denom = Vec.dot sky n
+                                if abs denom < 1e-10 then
+                                    printfn "[DNS-ALIGN] sky is parallel to DnS plane — cannot project"
+                                else
+                                    // Solve: plane.Height(p2 + t*sky) = 0  →  t = -Height(p2) / dot(sky,n)
+                                    let t     = -plane.plane.Height(p2) / denom
+                                    let delta = t * sky
+                                    let current = opcTranslations.[opc2].Value
+                                    transact (fun _ ->
+                                        opcTranslations.[opc2].Value <- current + delta
+                                        pickPoint2.Value <- p2 + delta
+                                    )
+                                    printfn "[DNS-ALIGN] OPC %d shifted %.3f along sky to DnS plane; total offset: X=%.3f Y=%.3f Z=%.3f"
+                                        opc2 t
+                                        (current + delta).X (current + delta).Y (current + delta).Z
+                )
+
                 // Shift + MouseWheel: translate OPC2 along the connection line between point1 and point2.
                 // Camera zoom is suppressed (handled in createOrbitController via shiftHeld flag).
                 // Each scroll tick moves OPC2 by 1% of the scene diagonal towards or away from OPC1.
@@ -590,8 +630,11 @@ module UnifiedViewer =
                         if not (Double.IsNaN p1.X) && not (Double.IsNaN p2.X) && opc1 >= 0 && opc2 >= 0 && opc1 <> opc2 then
                             // p1 and p2 are depth-unprojected from the stableTrafo output, so they
                             // already include each OPC's current AlignmentTranslation — no extra offset needed.
-                            let connectionDir = Vec.normalize (p1 - p2)
-                            let step = (p1 - p2).Length * 0.1 * (if delta > 0.0 then 1.0 else -1.0)
+                            let diff = p1 - p2
+                            let connectionDir =
+                                if diff.Length > 1e-6 then Vec.normalize diff
+                                else Vec.normalize (opcTranslations.[opc2].Value - opcTranslations.[opc1].Value)
+                            let step = sceneSize * 0.04 * (if delta > 0.0 then 1.0 else -1.0)
                             let translation = connectionDir * step
                             let current = opcTranslations.[opc2].Value
                             transact (fun _ ->
@@ -664,6 +707,48 @@ module UnifiedViewer =
                     )
                     |> Sg.dynamic
 
+                let makeTriangle (a : V3d) (b : V3d) (c : V3d) (color : C4b) : ISg =
+                    IndexedGeometry(
+                        Mode       = IndexedGeometryMode.TriangleList,
+                        IndexedAttributes =
+                            SymDict.ofList [
+                                DefaultSemantic.Positions, [| V3f a; V3f b; V3f c |] :> System.Array
+                            ]
+                    )
+                    |> Sg.ofIndexedGeometry
+                    |> Sg.shader {
+                        do! stableTrafo
+                        do! DefaultSurfaces.constantColor (C4f color)
+                        do! SharedShaders.noPick
+                    }
+                    |> Sg.cullMode' CullMode.None
+                    |> Sg.blendMode' BlendMode.Blend
+
+                // Triangle 1 (red):   p1 / original-p2 / p2-sky-projected-onto-DnS-plane  (= B key target)
+                // Triangle 2 (yellow): p1 / B-target    / p2-sky-aligned-to-p1-height       (= A key target)
+                // Visible whenever both pick points are set and a DnS plane has been fitted.
+                let triangleSg =
+                    AVal.map3 (fun (p1 : V3d) (p2orig : V3d) (rs : RibbonState) ->
+                        match rs.dnSPlane with
+                        | None -> Sg.ofList [] :> ISg
+                        | Some plane when not (Double.IsNaN p1.X || Double.IsNaN p2orig.X) ->
+                            let sky   = Vec.normalize config.sky
+                            let n     = plane.plane.Normal
+                            let denom = Vec.dot sky n
+                            if abs denom < 1e-10 then Sg.ofList [] :> ISg
+                            else
+                                let t1 = -plane.plane.Height(p2orig) / denom
+                                let z1 = p2orig + t1 * sky
+                                let h1 = Vec.dot p1 sky
+                                let h2 = Vec.dot p2orig sky
+                                let z2 = p2orig + (h1 - h2) * sky
+                                let tri1 = makeTriangle p1 p2orig z1 (C4b(255uy, 0uy, 0uy, 120uy))
+                                let tri2 = makeTriangle p1 z1 z2 (C4b(255uy, 215uy, 0uy, 120uy))
+                                Sg.ofList [tri1; tri2] :> ISg
+                        | _ -> Sg.ofList [] :> ISg
+                    ) pickPoint1 originalPickPoint2 ribbonState
+                    |> Sg.dynamic
+
                 // Separate geometry (affected by wireframe) from overlays (always solid)
                 let geometryScene =
                     opcSceneWithShaders
@@ -677,7 +762,7 @@ module UnifiedViewer =
                 let combinedScene =
                     geometryScene
                     |> Sg.andAlso (
-                        Sg.ofList [ orbitCenterSphere; cursorSphere; pickSphere1; pickSphere2; alignArrowSg; scrollArrowSg ]
+                        Sg.ofList [ orbitCenterSphere; cursorSphere; pickSphere1; pickSphere2; alignArrowSg; scrollArrowSg; triangleSg ]
                         |> Sg.viewTrafo (view |> AVal.map CameraView.viewTrafo)
                         |> Sg.projTrafo (frustum |> AVal.map Frustum.projTrafo)
                     )

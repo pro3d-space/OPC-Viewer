@@ -1,90 +1,19 @@
 namespace PRo3D.Viewer.Ribbon
 
 open Aardvark.Base
-open Aardvark.Geometry
 
 /// Pure geometry algorithms for building the ribbon mesh data.
-///
-/// One algorithm only: per-segment dip-and-strike extrusion.
 ///
 /// For each segment of the polyline (the line between two consecutive
 /// vertices P_i and P_{i+1}) we
 ///   1. collect a window of nearby polyline points,
-///   2. fit a plane through that window with LinearRegression3d,
-///   3. derive the geological strike and dip vectors using up = Y:
-///         strike = up × planeNormal
-///         dip    = strike × planeNormal
-///   4. emit a quad (P_i, P_{i+1}) extruded ±halfWidth along the dip vector.
+///   2. fit a plane through that window (via DnsAlgorithms.fitPlane),
+///   3. derive the geological strike and dip vectors using up = Y,
+///   4. emit a quad extruded ±halfWidth along the dip vector.
 ///
-/// To keep adjacent quads connected the dip vector at every interior
-/// polyline vertex is the average of the two incident segment dips, so
-/// neighbouring segments meet along a shared edge instead of producing
-/// disjoint floating ribbons.
-///
-/// The vertex shader does the actual extrusion:
-///   worldPos = centerPos + side * halfWidth * dipVec
-/// so changing halfWidth at runtime only requires updating the uniform.
+/// Adjacent quads share averaged dip vectors at interior polyline vertices.
+/// The vertex shader applies the actual extrusion.
 module RibbonAlgorithms =
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    /// Return -1 if the plane normal points away from `up`, +1 otherwise.
-    /// Used to flip the plane normal so it always points roughly "upward",
-    /// which makes the strike/dip cross products produce a stable orientation.
-    let private signedOrientation (up : V3d) (plane : Plane3d) : int =
-        if Vec.dot plane.Normal up < 0.0 then -1 else 1
-
-    /// Standard deviation given a precomputed average. Two-pass; matches the
-    /// helper referenced in the original PRo3D snippet.
-    let private computeStandardDeviation (avg : float) (xs : float[]) : float =
-        if xs.Length = 0 then 0.0
-        else
-            let s =
-                xs
-                |> Array.sumBy (fun x -> let d = x - avg in d * d)
-            sqrt (s / float xs.Length)
-
-    /// EVD-style plane fallback used when LinearRegression3d cannot fit a plane
-    /// (e.g. fewer than 3 distinct points or co-linear input). We just return
-    /// a plane passing through the centroid with the supplied up vector as its
-    /// normal — good enough to keep rendering until enough points are available.
-    let private fallbackPlane (up : V3d) (points : V3d[]) : Plane3d =
-        let centroid =
-            if points.Length = 0 then V3d.Zero
-            else (points |> Array.fold (+) V3d.Zero) / float points.Length
-        Plane3d(up.Normalized, centroid)
-
-    /// Fit a plane through `points` using LinearRegression3d, fall back to an
-    /// up-aligned plane on failure. Logs the residuals (avg / max / min / std /
-    /// sum-of-squares), exactly matching the original PRo3D snippet.
-    let private fitPlane (up : V3d) (points : V3d[]) : Plane3d =
-        let linRegression =
-            if points.Length >= 3 then
-                LinearRegression3d(points).TryGetRegressionInfo()
-            else
-                None
-
-        Log.line "[RibbonAlgorithms] %A" linRegression
-
-        let plane =
-            match linRegression with
-            | Some lr -> lr.Plane
-            | None ->
-                Log.line "[dns computation] linear regression failed, fallback to evd"
-                fallbackPlane up points
-
-        if points.Length > 0 then
-            let distances = points |> Array.map (fun x -> (plane.Height x) |> abs)
-            let sos = distances |> Array.map (fun x -> x * x) |> Array.sum
-            let avg = distances |> Array.average
-            let mx  = distances |> Array.max
-            let mn  = distances |> Array.min
-            let std = distances |> computeStandardDeviation avg
-            Log.line
-                "[dipandStrike]: avg %f; max %f; min %f; std: %f; sols: %f"
-                avg mx mn std sos
-
-        plane
 
     // ── Per-segment dip / strike ─────────────────────────────────────────────
 
@@ -149,11 +78,11 @@ module RibbonAlgorithms =
         let p1     = points.[i + 1]
         let window = regressionWindow useAllPoints neighborCount i points
 
-        let plane = fitPlane up window
+        let plane = DnsAlgorithms.fitPlane up window
 
         // Orient the plane normal so it points in the same direction as `up`.
         let planeNormal =
-            match signedOrientation up plane with
+            match DnsAlgorithms.signedOrientation up plane with
             | -1 -> -plane.Normal
             | _  ->  plane.Normal
 
@@ -269,58 +198,3 @@ module RibbonAlgorithms =
 
         centers, dips, sides, indices
 
-    // ── DnS plane fitting ────────────────────────────────────────────────────
-
-    /// Fit a plane through all points from selected polylines using
-    /// LinearRegression3d.  Returns None when fewer than 3 points are selected.
-    /// The returned DnSPlane is immediately visible with a size equal to the
-    /// maximum in-plane distance from the centre of mass — just enough to cover
-    /// the selected point cloud.
-    let computeDnSPlane (up : V3d) (polylines : Polyline[]) : DnSPlane option =
-        let selectedPoints =
-            polylines
-            |> Array.filter  (fun p -> p.isSelected)
-            |> Array.collect (fun p -> p.points)
-
-        if selectedPoints.Length < 3 then None
-        else
-            let plane = fitPlane up selectedPoints
-
-            let centerOfMass =
-                (selectedPoints |> Array.fold (+) V3d.Zero) / float selectedPoints.Length
-
-            let planeNormal =
-                match signedOrientation up plane with
-                | -1 -> -plane.Normal
-                | _  ->  plane.Normal
-
-            let eps = 1e-6
-            let strikeRaw = Vec.cross up planeNormal
-            let strike =
-                if strikeRaw.Length < eps then
-                    let fallback = Vec.cross up V3d.XAxis
-                    if fallback.Length < eps then V3d.ZAxis.Normalized
-                    else fallback.Normalized
-                else
-                    strikeRaw.Normalized
-
-            let dipRaw = Vec.cross strike planeNormal
-            let dip =
-                if dipRaw.Length < eps then V3d.XAxis
-                else dipRaw.Normalized
-
-            let defaultSize =
-                selectedPoints
-                |> Array.map (fun p ->
-                    let v = p - centerOfMass
-                    (v - Vec.dot v planeNormal * planeNormal).Length)
-                |> Array.max
-
-            Some {
-                isVisible       = true
-                size            = defaultSize
-                dipDirection    = dip
-                strikeDirection = strike
-                plane           = Plane3d(planeNormal, centerOfMass)
-                centerOfMass    = centerOfMass
-            }
