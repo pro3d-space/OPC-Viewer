@@ -30,16 +30,21 @@ module RibbonShaders =
         vertex {
             let hw : float = uniform?HalfWidth
 
-            // Use the stable model trafo — works in eye-relative space
-            // to avoid float precision loss at large coordinates
+            // Positions are stored relative to AlignmentTranslation (a nearby reference
+            // point), so centerView is small and precise in float32.
             let centerView  = uniform.ModelViewTrafo * v.pos
             let dipView     = (uniform.ModelViewTrafo * V4d(v.dipVec, 0.0)).XYZ
 
             let extrudedView = V4d(centerView.XYZ + v.side * hw * dipView, 1.0)
             let nView        = (uniform.ModelViewTrafo * V4d(v.n, 0.0)).XYZ |> Vec.normalize
 
+            // Add the reference translation back in view space using double precision
+            // (FShade emits dvec4/dmat4 for V3d/M44d), avoiding catastrophic cancellation.
+            let translation : V3d = uniform?AlignmentTranslation
+            let tvp = uniform.ViewTrafo * V4d(translation, 0.0)
+
             return { v with
-                        pos = uniform.ProjTrafo * extrudedView
+                        pos = uniform.ProjTrafo * (extrudedView + tvp)
                         n   = nView }
         }
 

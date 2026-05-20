@@ -99,6 +99,9 @@ module RibbonScene =
 
     /// Orange ribbon mesh, extruded on the GPU via RibbonShaders.extrude.
     /// One independent quad per polyline segment.
+    /// Centers are stored relative to the first center (small V3f); the reference
+    /// is passed as AlignmentTranslation so RibbonShaders.extrude can add it back
+    /// in double precision on the GPU.
     let private ribbonSg
             (frames    : RibbonAlgorithms.SegmentFrame[])
             (halfWidth : float)
@@ -107,6 +110,9 @@ module RibbonScene =
         else
             let centers, dipVecs, sides, indices =
                 RibbonAlgorithms.buildRibbonMesh frames
+
+            let ref = centers.[0]   // reference point — V3d, goes into AlignmentTranslation
+            let localCenters = centers |> Array.map (fun c -> V3f(c - ref))
 
             // Per-vertex shading normal: in the plane spanned by dip and the
             // segment's tangent, perpendicular to both — i.e. the geometric
@@ -124,7 +130,7 @@ module RibbonScene =
                     IndexArray = (indices :> System.Array),
                     IndexedAttributes =
                         SymDict.ofList [
-                            DefaultSemantic.Positions, centers |> Array.map V3f :> System.Array
+                            DefaultSemantic.Positions, localCenters             :> System.Array
                             DefaultSemantic.Normals,   normals                  :> System.Array
                             Sym.ofString "DipVec",     dipVecs |> Array.map V3f :> System.Array
                             Sym.ofString "Side",       sides                    :> System.Array
@@ -158,7 +164,7 @@ module RibbonScene =
                     IndexArray = (lineIndices :> System.Array),
                     IndexedAttributes =
                         SymDict.ofList [
-                            DefaultSemantic.Positions, centers |> Array.map V3f :> System.Array
+                            DefaultSemantic.Positions, localCenters             :> System.Array
                             DefaultSemantic.Normals,   normals                  :> System.Array
                             Sym.ofString "DipVec",     dipVecs |> Array.map V3f :> System.Array
                             Sym.ofString "Side",       sides                    :> System.Array
@@ -173,15 +179,18 @@ module RibbonScene =
                 }
 
             Sg.andAlso ribbonOutlines ribbonFill
+            |> Sg.uniform "AlignmentTranslation" (AVal.constant ref)
 
-    /// Red polyline along the control points.
-    let private polylineSg (points : V3d[]) : ISg =
+    /// Polyline along the control points, rendered in the given color.
+    /// ref is the first point; positions are stored relative to it (small V3f)
+    /// and added back in double precision via AlignmentTranslation in the shader.
+    let private polylineSg (color : C4f) (ref : V3d) (points : V3d[]) : ISg =
         if points.Length < 2 then Sg.ofList []
         else
             let lineVerts =
                 Array.init ((points.Length - 1) * 2) (fun i ->
-                    if i % 2 = 0 then V3f points.[i / 2]
-                    else              V3f points.[i / 2 + 1])
+                    let pt = if i % 2 = 0 then points.[i / 2] else points.[i / 2 + 1]
+                    V3f(pt - ref))
             IndexedGeometry(
                 Mode = IndexedGeometryMode.LineList,
                 IndexedAttributes =
@@ -189,38 +198,48 @@ module RibbonScene =
             )
             |> Sg.ofIndexedGeometry
             |> Sg.shader {
-                do! DefaultSurfaces.stableTrafo
-                do! DefaultSurfaces.constantColor C4f.Red
+                do! SharedShaders.stableTrafo
+                do! DefaultSurfaces.constantColor color
                 do! SharedShaders.noPick
             }
+            |> Sg.uniform "AlignmentTranslation" (AVal.constant ref)
 
 
     // ── public API ────────────────────────────────────────────────────────────
 
-    /// Build the scene graph for the currently selected polyline in RibbonState.
+    /// Build the scene graph for the current ribbon state.
+    /// Ribbon mesh (orange) is shown for the currently selected polyline only.
+    /// All polylines are drawn as lines: yellow if isSelected=true, white otherwise.
     let build (state : RibbonState) (transform : Trafo3d option) : ISg =
-        let pts = RibbonState.currentPoints state
+        let applyTransform (pts : V3d[]) =
+            match transform with
+            | None   -> pts
+            | Some t -> pts |> Array.map (fun p -> t.Forward.TransformPos p)
 
+        // Orange ribbon mesh for the currently selected polyline
         let ribbonParts =
+            let pts = RibbonState.currentPoints state
             if pts.Length < 2 then []
             else
-                // Pre-apply the optional transform in world space so no child
-                // Sg node ever sees a double-transform.
-                let worldPts =
-                    match transform with
-                    | None   -> pts
-                    | Some t -> pts |> Array.map (fun p -> t.Forward.TransformPos p)
-
+                let worldPts = applyTransform pts
                 let frames =
                     RibbonAlgorithms.computeSegmentFrames
                         up state.useAllPoints state.neighborCount worldPts
+                [ ribbonSg frames state.halfWidth ]
 
-                [   yield ribbonSg frames state.halfWidth
-                    if state.showPolyline then yield polylineSg worldPts ]
+        // All polylines as colored lines: yellow = selected, white = unselected
+        let allPolylineParts =
+            state.allPolylines |> Array.toList |> List.collect (fun pl ->
+                if pl.points.Length < 2 then []
+                else
+                    let pts   = applyTransform pl.points
+                    let ref   = pts.[0]
+                    let color = if pl.isSelected then C4f.Yellow else C4f.White
+                    [ polylineSg color ref pts ])
 
         let dnsParts =
             match state.dnSPlane with
             | Some plane when plane.isVisible -> [DnsScene.planeSg plane]
             | _ -> []
 
-        Sg.ofList (ribbonParts @ dnsParts)   // no Sg.trafo' — already baked in
+        Sg.ofList (ribbonParts @ allPolylineParts @ dnsParts)

@@ -83,24 +83,7 @@ module UnifiedViewer =
         // Reuse shared shaders
         let LoDColor = SharedShaders.LoDColor
 
-        let stableTrafo (v : Vertex) =
-            vertex {
-                let vp = uniform.ModelViewTrafo * v.pos
-                let wp = uniform.ModelTrafo * v.pos
-
-                let translation : V3d = uniform?AlignmentTranslation
-                let tvp = uniform.ViewTrafo * V4d(translation, 0.0)
-
-                return {
-                    pos = uniform.ProjTrafo * (vp + tvp)
-                    wp  = V4d(wp.XYZ + translation, 1.0)
-                    n   = uniform.NormalMatrix * v.n
-                    b   = uniform.NormalMatrix * v.b
-                    t   = uniform.NormalMatrix * v.t
-                    c   = v.c
-                    tc  = v.tc
-                }
-            }
+        let stableTrafo = SharedShaders.stableTrafo
 
         let diffuseLighting (v : Vertex) =
             fragment {
@@ -355,6 +338,17 @@ module UnifiedViewer =
                     |> Seq.map (fun _ -> AVal.init V3d.Zero)
                     |> Seq.toList
 
+                // Returns the index of the OPC whose patch trafo center is closest to pos.
+                // Returns 0 if no trafos are available.
+                let nearestOpcIdx (pos : V3d) =
+                    match viewConfig.patchTrafos with
+                    | [] -> 0
+                    | trafos ->
+                        trafos
+                        |> List.mapi (fun i t -> i, (t.Forward.TransformPos V3d.Zero - pos).Length)
+                        |> List.minBy snd
+                        |> fst
+
                 let hierarchies =
                     config.scene.patchHierarchies
                     |> Seq.toList
@@ -415,6 +409,14 @@ module UnifiedViewer =
                 // OPC-local position of pickpoint2 (i.e. pickpoint2 world pos minus OPC2 translation at click time).
                 // Used as the "original" p2 for triangle visualizations, independent of accumulated alignment.
                 let originalPickPoint2 = AVal.init V3d.NaN
+
+                // pickPoint1 is always the DNS plane center — initialize from startup state if available.
+                match viewConfig.initialRibbonState.dnSPlane with
+                | Some plane ->
+                    transact (fun _ ->
+                        pickPoint1.Value    <- plane.centerOfMass
+                        pickPoint1Opc.Value <- nearestOpcIdx plane.centerOfMass)
+                | None -> ()
 
                 let makePickSphere (color : C4b) (pos : cval<V3d>) =
                     let isVisible = pos |> AVal.map (fun p -> not (Double.IsNaN p.X))
@@ -499,20 +501,21 @@ module UnifiedViewer =
                         modifyRibbon (fun s -> { s with halfWidth = max 0.1 (s.halfWidth / 1.25) })
                 )
                 win.Keyboard.KeyDown(Keys.P).Values.Add(fun _ ->
-                    modifyRibbon (fun s ->
-                        match s.dnSPlane with
-                        | Some plane ->
-                            { s with dnSPlane = Some { plane with isVisible = not plane.isVisible } }
+                    let s = ribbonState.Value
+                    match s.dnSPlane with
+                    | Some plane ->
+                        modifyRibbon (fun s -> { s with dnSPlane = Some { plane with isVisible = not plane.isVisible } })
+                    | None ->
+                        match DnsAlgorithms.computeDnSPlane V3d.YAxis s.allPolylines with
                         | None ->
-                            match DnsAlgorithms.computeDnSPlane V3d.YAxis s.allPolylines with
-                            | None ->
-                                printfn "[DnS] no selected polylines with >= 3 points"
-                                s
-                            | Some plane ->
-                                printfn "[DnS] plane fitted: normal %A  centre %A  radius %.3f"
-                                    plane.plane.Normal plane.centerOfMass plane.size
-                                { s with dnSPlane = Some plane }
-                    )
+                            printfn "[DnS] no selected polylines with >= 3 points"
+                        | Some plane ->
+                            printfn "[DnS] plane fitted: normal %A  centre %A  radius %.3f"
+                                plane.plane.Normal plane.centerOfMass plane.size
+                            transact (fun _ ->
+                                ribbonState.Value    <- { s with dnSPlane = Some plane }
+                                pickPoint1.Value    <- plane.centerOfMass
+                                pickPoint1Opc.Value <- nearestOpcIdx plane.centerOfMass)
                 )
                 win.Keyboard.KeyDown(Keys.Down).Values.Add(fun _ ->
                     modifyRibbon (fun s -> { s with neighborCount = max 0 (s.neighborCount - 1); useAllPoints = false })
@@ -522,31 +525,31 @@ module UnifiedViewer =
                 )
                 win.Keyboard.KeyDown(Keys.Left).Values.Add(fun _ ->
                     modifyRibbon (fun s ->
-                        let n = s.allPolylines.Length
-                        if n = 0 then s
+                        let sel = s.allPolylines |> Array.mapi (fun i p -> i, p.isSelected)
+                                                 |> Array.choose (fun (i, b) -> if b then Some i else None)
+                        if sel.Length = 0 then s
                         else
-                            let idx = (s.selectedIndex - 1 + n) % n
-                            printfn "[RIBBON] feature %d / %d" (idx + 1) n
+                            let pos = sel |> Array.tryFindIndexBack (fun i -> i < s.selectedIndex)
+                                          |> Option.defaultValue (sel.Length - 1)
+                            let idx = sel.[pos]
+                            printfn "[RIBBON] feature %d / %d (selected)" (pos + 1) sel.Length
                             { s with selectedIndex = idx })
                 )
                 win.Keyboard.KeyDown(Keys.Right).Values.Add(fun _ ->
                     modifyRibbon (fun s ->
-                        let n = s.allPolylines.Length
-                        if n = 0 then s
+                        let sel = s.allPolylines |> Array.mapi (fun i p -> i, p.isSelected)
+                                                 |> Array.choose (fun (i, b) -> if b then Some i else None)
+                        if sel.Length = 0 then s
                         else
-                            let idx = (s.selectedIndex + 1) % n
-                            printfn "[RIBBON] feature %d / %d" (idx + 1) n
+                            let pos = sel |> Array.tryFindIndex (fun i -> i > s.selectedIndex)
+                                          |> Option.defaultValue 0
+                            let idx = sel.[pos]
+                            printfn "[RIBBON] feature %d / %d (selected)" (pos + 1) sel.Length
                             { s with selectedIndex = idx })
                 )
 
-                // Pick point 1 (key 1) and pick point 2 (key 2) — only when cursor is on a surface
-                win.Keyboard.KeyDown(Keys.D1).Values.Add(fun _ ->
-                    let pos = cursorPos.Value
-                    let opc = cursorOpcIdx.Value
-                    if pos <> V3d.Zero && opc >= 0 then
-                        transact (fun _ -> pickPoint1.Value <- pos; pickPoint1Opc.Value <- opc)
-                        printfn "[PICK1] OPC %d  X=%.3f Y=%.3f Z=%.3f" opc pos.X pos.Y pos.Z
-                )
+                // Pick point 2 (key 2) — only when cursor is on a surface.
+                // Pick point 1 is always the DNS plane center (set automatically).
                 win.Keyboard.KeyDown(Keys.D2).Values.Add(fun _ ->
                     let pos = cursorPos.Value
                     let opc = cursorOpcIdx.Value
@@ -753,16 +756,15 @@ module UnifiedViewer =
                 let geometryScene =
                     opcSceneWithShaders
                     |> Sg.andAlso objSceneWithShaders
-                    |> Sg.andAlso ribbonScene
                     |> Sg.viewTrafo (view |> AVal.map CameraView.viewTrafo)
                     |> Sg.projTrafo (frustum |> AVal.map Frustum.projTrafo)
                     |> Sg.fillMode fillMode
 
-                // Combine geometry with overlays (orbit sphere and cursor are not affected by fillMode)
+                // Combine geometry with overlays (ribbon, spheres, arrows — not affected by fillMode)
                 let combinedScene =
                     geometryScene
                     |> Sg.andAlso (
-                        Sg.ofList [ orbitCenterSphere; cursorSphere; pickSphere1; pickSphere2; alignArrowSg; scrollArrowSg; triangleSg ]
+                        Sg.ofList [ ribbonScene; orbitCenterSphere; cursorSphere; pickSphere1; pickSphere2; alignArrowSg; scrollArrowSg; triangleSg ]
                         |> Sg.viewTrafo (view |> AVal.map CameraView.viewTrafo)
                         |> Sg.projTrafo (frustum |> AVal.map Frustum.projTrafo)
                     )

@@ -302,11 +302,19 @@ module ViewCommand =
                     printfn "[RIBBON ERROR] %s" err
                     RibbonState.defaultState
                 | Result.Ok polylines ->
+                    let autoPlane =
+                        match DnsAlgorithms.computeDnSPlane V3d.YAxis polylines with
+                        | Some plane ->
+                            printfn "[DnS] auto-fitted at startup: normal %A  centre %A  radius %.3f"
+                                plane.plane.Normal plane.centerOfMass plane.size
+                            Some plane
+                        | None -> None
                     { RibbonState.defaultState with
                         allPolylines  = polylines
                         selectedIndex = 0
                         halfWidth     = halfWidth
-                        showPolyline  = true }
+                        showPolyline  = true
+                        dnSPlane      = autoPlane }
 
         let patchTrafos =
             layerInfosWithTrafos |> List.map snd

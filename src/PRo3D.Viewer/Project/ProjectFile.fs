@@ -195,7 +195,7 @@ module ProjectFile =
                         | _ -> None
 
                     let ribbon =
-                        match root.TryGetProperty("ribbon") with
+                        match root.TryGetProperty("dns") with
                         | true, prop when prop.ValueKind = JsonValueKind.Object ->
                             match prop.TryGetProperty("geojson") with
                             | true, gj when gj.ValueKind = JsonValueKind.String ->
