@@ -182,34 +182,36 @@ module ViewCommand =
             else
                 []
 
+        // Parse a single .trafo file (JSON: [forwardMat, inverseMat]) -> Trafo3d option
+        let parseTrafoFile (trafoFile : string) : Trafo3d option =
+            try
+                let json = System.IO.File.ReadAllText trafoFile
+                use doc  = System.Text.Json.JsonDocument.Parse json
+                let arr  = doc.RootElement
+                let parseMat (el : System.Text.Json.JsonElement) =
+                    let rows = el.EnumerateArray() |> Seq.toArray
+                    M44d(
+                        rows.[0].[0].GetDouble(), rows.[0].[1].GetDouble(), rows.[0].[2].GetDouble(), rows.[0].[3].GetDouble(),
+                        rows.[1].[0].GetDouble(), rows.[1].[1].GetDouble(), rows.[1].[2].GetDouble(), rows.[1].[3].GetDouble(),
+                        rows.[2].[0].GetDouble(), rows.[2].[1].GetDouble(), rows.[2].[2].GetDouble(), rows.[2].[3].GetDouble(),
+                        rows.[3].[0].GetDouble(), rows.[3].[1].GetDouble(), rows.[3].[2].GetDouble(), rows.[3].[3].GetDouble()
+                    )
+                let forward = parseMat arr.[0]
+                let inverse = parseMat arr.[1]
+                printfn "[TRAFO] loaded .trafo file: %s" trafoFile
+                Some (Trafo3d(forward, inverse))
+            with ex ->
+                printfn "[TRAFO] failed to load .trafo file: %s" ex.Message
+                None
+
         // Try to find and load a .trafo file alongside the OPC dataset
         let loadTrafoFile (opcPath : string) : Trafo3d option =
-            let dir = 
+            let dir =
                 if System.IO.Directory.Exists opcPath then opcPath
                 else System.IO.Path.GetDirectoryName opcPath
             System.IO.Directory.GetFiles(dir, "*.trafo")
             |> Array.tryHead
-            |> Option.bind (fun trafoFile ->
-                try
-                    let json = System.IO.File.ReadAllText trafoFile
-                    use doc  = System.Text.Json.JsonDocument.Parse json
-                    let arr  = doc.RootElement
-                    let parseMat (el : System.Text.Json.JsonElement) =
-                        let rows = el.EnumerateArray() |> Seq.toArray
-                        M44d(
-                            rows.[0].[0].GetDouble(), rows.[0].[1].GetDouble(), rows.[0].[2].GetDouble(), rows.[0].[3].GetDouble(),
-                            rows.[1].[0].GetDouble(), rows.[1].[1].GetDouble(), rows.[1].[2].GetDouble(), rows.[1].[3].GetDouble(),
-                            rows.[2].[0].GetDouble(), rows.[2].[1].GetDouble(), rows.[2].[2].GetDouble(), rows.[2].[3].GetDouble(),
-                            rows.[3].[0].GetDouble(), rows.[3].[1].GetDouble(), rows.[3].[2].GetDouble(), rows.[3].[3].GetDouble()
-                        )
-                    let forward = parseMat arr.[0]
-                    let inverse = parseMat arr.[1]
-                    printfn "[TRAFO] loaded .trafo file: %s" trafoFile
-                    Some (Trafo3d(forward, inverse))
-                with ex ->
-                    printfn "[TRAFO] failed to load .trafo file: %s" ex.Message
-                    None
-            )
+            |> Option.bind parseTrafoFile
         // Load a trafo per OPC entry — one trafo file per dataset folder
         let opcTrafos : Trafo3d[] =
             opcEntries |> Array.map (fun e ->
@@ -302,6 +304,20 @@ module ViewCommand =
                     printfn "[RIBBON ERROR] %s" err
                     RibbonState.defaultState
                 | Result.Ok polylines ->
+                    // Apply a name-matched .trafo next to the GeoJSON (lines.geojson -> lines.trafo),
+                    // analogous to the OPC trafo import. Absent file -> identity (leave as-is).
+                    let polylineTrafo =
+                        let candidate = System.IO.Path.ChangeExtension(ribbonCfg.GeoJson, ".trafo")
+                        if System.IO.File.Exists candidate then
+                            parseTrafoFile candidate |> Option.defaultValue Trafo3d.Identity
+                        else
+                            Trafo3d.Identity
+                    let polylines =
+                        if polylineTrafo = Trafo3d.Identity then polylines
+                        else
+                            polylines
+                            |> Array.map (fun pl ->
+                                { pl with points = pl.points |> Array.map polylineTrafo.Forward.TransformPos })
                     let autoPlane =
                         match DnsAlgorithms.computeDnSPlane V3d.YAxis polylines with
                         | Some plane ->

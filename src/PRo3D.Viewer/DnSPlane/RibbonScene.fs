@@ -99,9 +99,9 @@ module RibbonScene =
 
     /// Orange ribbon mesh, extruded on the GPU via RibbonShaders.extrude.
     /// One independent quad per polyline segment.
-    /// Centers are stored relative to the first center (small V3f); the reference
-    /// is passed as AlignmentTranslation so RibbonShaders.extrude can add it back
-    /// in double precision on the GPU.
+    /// Centers are stored relative to the first center (small V3f); a ModelTrafo
+    /// of Translation(ref) brings them back to world space, composed into
+    /// ModelViewTrafo on the CPU in double precision.
     let private ribbonSg
             (frames    : RibbonAlgorithms.SegmentFrame[])
             (halfWidth : float)
@@ -179,11 +179,15 @@ module RibbonScene =
                 }
 
             Sg.andAlso ribbonOutlines ribbonFill
-            |> Sg.uniform "AlignmentTranslation" (AVal.constant ref)
+            // Placement lives in ModelTrafo (like the OPCs/spheres): vertices are
+            // stored relative to ref and Translation(ref) brings them back to world
+            // space, composed into ModelViewTrafo on the CPU in double precision.
+            // AlignmentTranslation stays at its zero default for the ribbon.
+            |> Sg.trafo' (Trafo3d.Translation ref)
 
     /// Polyline along the control points, rendered in the given color.
     /// ref is the first point; positions are stored relative to it (small V3f)
-    /// and added back in double precision via AlignmentTranslation in the shader.
+    /// and brought back to world space via a ModelTrafo of Translation(ref).
     let private polylineSg (color : C4f) (ref : V3d) (points : V3d[]) : ISg =
         if points.Length < 2 then Sg.ofList []
         else
@@ -202,7 +206,11 @@ module RibbonScene =
                 do! DefaultSurfaces.constantColor color
                 do! SharedShaders.noPick
             }
-            |> Sg.uniform "AlignmentTranslation" (AVal.constant ref)
+            // Placement lives in ModelTrafo (like the OPCs/spheres): vertices are
+            // stored relative to ref and Translation(ref) brings them back to world
+            // space, composed into ModelViewTrafo on the CPU in double precision.
+            // AlignmentTranslation stays at its zero default for the ribbon.
+            |> Sg.trafo' (Trafo3d.Translation ref)
 
 
     // ── public API ────────────────────────────────────────────────────────────

@@ -17,7 +17,6 @@ module SharedShaders =
     /// Vertex type for shader processing
     type Vertex = {
         [<Position>]      pos : V4d
-        [<WorldPosition>] wp  : V4d
         [<Normal>]        n   : V3d
         [<BiNormal>]      b   : V3d
         [<Tangent>]       t   : V3d
@@ -51,15 +50,13 @@ module SharedShaders =
     let stableTrafo (v : Vertex) =
         vertex {
             let vp = uniform.ModelViewTrafo * v.pos
-            let wp = uniform.ModelTrafo * v.pos
             let translation : V3d = uniform?AlignmentTranslation
-            let tvp = uniform.ViewTrafo * V4d(translation, 0.0)
+            let tvp = uniform.ModelViewTrafo * V4d(translation, 0.0)
             return {
                 pos = uniform.ProjTrafo * (vp + tvp)
-                wp  = V4d(wp.XYZ + translation, 1.0)
-                n   = uniform.NormalMatrix * v.n
-                b   = uniform.NormalMatrix * v.b
-                t   = uniform.NormalMatrix * v.t
+                n   = uniform.ModelViewTrafoInv.TransposedTransformDir v.n |> Vec.normalize
+                b   = uniform.ModelViewTrafo.TransformDir v.b |> Vec.normalize
+                t   = uniform.ModelViewTrafo.TransformDir v.t |> Vec.normalize
                 c   = v.c
                 tc  = v.tc
             }
