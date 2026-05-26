@@ -26,8 +26,10 @@ module DnsScene =
     /// Disk radius is controlled externally via DnSPlane.size (Shift+/-).
     ///
     /// All geometry is built in center-local space (small V3f offsets from center).
-    /// The center is passed as AlignmentTranslation so the custom stableTrafo can
-    /// add it back in double precision on the GPU, avoiding float32 precision loss.
+    /// The center is applied as a ModelTrafo (Translation center) — exactly like the
+    /// ribbon/polylines — so it is composed into ModelViewTrafo on the CPU in double
+    /// precision. (Routing the huge center through the AlignmentTranslation uniform
+    /// instead would lose precision in the shader's view-space term.)
     let planeSg (plane : DnSPlane) : ISg =
         let segs   = 64
         let center = plane.centerOfMass   // V3d — goes into AlignmentTranslation uniform
@@ -85,6 +87,10 @@ module DnsScene =
         // ── strike lines: local coords ────────────────────────────────────────
         let strikeLineSg = lineSg (-strike * lineLen) (strike * lineLen) C4b.Red
 
-        // ── apply center as AlignmentTranslation for the whole group ──────────
+        // ── place the whole group via a ModelTrafo (like the ribbon/polylines) ──
+        // Vertices are stored relative to center; Translation(center) brings them back
+        // to world space, composed into ModelViewTrafo on the CPU in double precision.
+        // AlignmentTranslation stays at its zero default. The dip cone's own inner
+        // Sg.trafo' composes correctly (cone-local → center-local → world).
         Sg.ofList [ diskSg; dipLineSg; dipConeSg; strikeLineSg ]
-        |> Sg.uniform "AlignmentTranslation" (AVal.constant center)
+        |> Sg.trafo' (Trafo3d.Translation center)
