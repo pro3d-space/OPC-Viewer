@@ -409,6 +409,12 @@ module UnifiedViewer =
                 // OPC-local position of pickpoint2 (i.e. pickpoint2 world pos minus OPC2 translation at click time).
                 // Used as the "original" p2 for triangle visualizations, independent of accumulated alignment.
                 let originalPickPoint2 = AVal.init V3d.NaN
+                // Global world-space direction (p2 → p1) for Shift+scroll alignment, stored like the
+                // pick points. Refreshed whenever pickPoint2 is (re)placed or moved by the A/B keys, so
+                // the scroll always follows the current connection line — and OPC2 can keep sliding along
+                // it even after pickPoint2 reaches/passes pickPoint1 (where the live p1-p2 difference
+                // would collapse to zero or flip sign). V3d.Zero means "not captured yet".
+                let scrollDir = AVal.init V3d.Zero
 
                 // pickPoint1 is always the DNS plane center — initialize from startup state if available.
                 match viewConfig.initialRibbonState.dnSPlane with
@@ -554,10 +560,15 @@ module UnifiedViewer =
                     let pos = cursorPos.Value
                     let opc = cursorOpcIdx.Value
                     if pos <> V3d.Zero && opc >= 0 then
+                        let p1 = pickPoint1.Value
                         transact (fun _ ->
                             pickPoint2.Value <- pos
                             pickPoint2Opc.Value <- opc
                             originalPickPoint2.Value <- pos - opcTranslations.[opc].Value
+                            // Refresh the scroll-alignment direction (p2 → p1) for this pick.
+                            if not (Double.IsNaN p1.X) then
+                                let d = p1 - pos
+                                if d.Length > 1e-6 then scrollDir.Value <- Vec.normalize d
                         )
                         printfn "[PICK2] OPC %d  X=%.3f Y=%.3f Z=%.3f" opc pos.X pos.Y pos.Z
                 )
@@ -579,9 +590,13 @@ module UnifiedViewer =
                             let delta = (h1 - h2) * sky   // world-space shift along up-vector
                             // Accumulate the translation on OPC 2's offset cval
                             let current = opcTranslations.[opc2].Value
+                            let newP2  = p2 + delta
                             transact (fun _ ->
                                 opcTranslations.[opc2].Value <- current + delta
-                                pickPoint2.Value <- p2 + delta
+                                pickPoint2.Value <- newP2
+                                // Refresh the scroll-alignment direction to the new connection line.
+                                let d = p1 - newP2
+                                if d.Length > 1e-6 then scrollDir.Value <- Vec.normalize d
                             )
                             printfn "[ALIGN] OPC %d shifted %.3f along sky; total offset: X=%.3f Y=%.3f Z=%.3f"
                                 opc2 (h1 - h2)
@@ -612,9 +627,13 @@ module UnifiedViewer =
                                     let t     = -plane.plane.Height(p2) / denom
                                     let delta = t * sky
                                     let current = opcTranslations.[opc2].Value
+                                    let newP2  = p2 + delta
                                     transact (fun _ ->
                                         opcTranslations.[opc2].Value <- current + delta
-                                        pickPoint2.Value <- p2 + delta
+                                        pickPoint2.Value <- newP2
+                                        // Refresh the scroll-alignment direction to the new connection line.
+                                        let d = p1 - newP2
+                                        if d.Length > 1e-6 then scrollDir.Value <- Vec.normalize d
                                     )
                                     printfn "[DNS-ALIGN] OPC %d shifted %.3f along sky to DnS plane; total offset: X=%.3f Y=%.3f Z=%.3f"
                                         opc2 t
@@ -631,22 +650,31 @@ module UnifiedViewer =
                         let opc1 = pickPoint1Opc.Value
                         let opc2 = pickPoint2Opc.Value
                         if not (Double.IsNaN p1.X) && not (Double.IsNaN p2.X) && opc1 >= 0 && opc2 >= 0 && opc1 <> opc2 then
-                            // p1 and p2 are depth-unprojected from the stableTrafo output, so they
-                            // already include each OPC's current AlignmentTranslation — no extra offset needed.
-                            let diff = p1 - p2
+                            // Use the stored connection direction so OPC2 keeps sliding along the current
+                            // line even once pickPoint2 reaches or passes pickPoint1 (where the live p1-p2
+                            // difference collapses or flips sign). Fall back to deriving it if it has not
+                            // been captured yet (e.g. p1 was set after p2 and no A/B key was pressed).
+                            let stored = scrollDir.Value
                             let connectionDir =
-                                if diff.Length > 1e-6 then Vec.normalize diff
-                                else Vec.normalize (opcTranslations.[opc2].Value - opcTranslations.[opc1].Value)
-                            let step = sceneSize * 0.04 * (if delta > 0.0 then 1.0 else -1.0)
-                            let translation = connectionDir * step
-                            let current = opcTranslations.[opc2].Value
-                            transact (fun _ ->
-                                opcTranslations.[opc2].Value <- current + translation
-                                pickPoint2.Value <- p2 + translation
-                            )
-                            printfn "[SCROLL-ALIGN] OPC %d step %.4f along connection line; total offset: X=%.3f Y=%.3f Z=%.3f"
-                                opc2 step
-                                (current + translation).X (current + translation).Y (current + translation).Z
+                                if stored.Length > 1e-6 then stored
+                                else
+                                    let diff = p1 - p2
+                                    if diff.Length > 1e-6 then Vec.normalize diff
+                                    elif (opcTranslations.[opc2].Value - opcTranslations.[opc1].Value).Length > 1e-6 then
+                                        Vec.normalize (opcTranslations.[opc2].Value - opcTranslations.[opc1].Value)
+                                    else V3d.Zero
+                            if connectionDir.Length > 1e-6 then
+                                let step = sceneSize * 0.04 * (if delta > 0.0 then 1.0 else -1.0)
+                                let translation = connectionDir * step
+                                let current = opcTranslations.[opc2].Value
+                                transact (fun _ ->
+                                    opcTranslations.[opc2].Value <- current + translation
+                                    pickPoint2.Value <- p2 + translation
+                                    if stored.Length < 1e-6 then scrollDir.Value <- connectionDir
+                                )
+                                printfn "[SCROLL-ALIGN] OPC %d step %.4f along connection line; total offset: X=%.3f Y=%.3f Z=%.3f"
+                                    opc2 step
+                                    (current + translation).X (current + translation).Y (current + translation).Z
                 )
 
                 // Arrow helper: line shaft + cone head, all in world space (AlignmentTranslation = zero).
