@@ -51,7 +51,10 @@ module SharedShaders =
         vertex {
             let vp = uniform.ModelViewTrafo * v.pos
             let translation : V3d = uniform?AlignmentTranslation
-            let tvp = uniform.ModelViewTrafo * V4d(translation, 0.0)
+            // AlignmentTranslation is a world-space reference/offset, so add it back in
+            // view space (ViewTrafo, not ModelViewTrafo) — otherwise a per-object model
+            // trafo (e.g. the OPC patch trafo) would rotate it. Matches RibbonShaders.extrude.
+            let tvp = uniform.ViewTrafo * V4d(translation, 0.0)
             return {
                 pos = uniform.ProjTrafo * (vp + tvp)
                 n   = uniform.ModelViewTrafoInv.TransposedTransformDir v.n |> Vec.normalize
