@@ -416,6 +416,10 @@ module UnifiedViewer =
                 // would collapse to zero or flip sign). V3d.Zero means "not captured yet".
                 let scrollDir = AVal.init V3d.Zero
 
+                // T key toggles the alignment helper visuals together: the red/yellow triangles
+                // and the align (yellow) + scroll (cyan) arrows.
+                let alignVisualsVisible = cval true
+
                 // pickPoint1 is always the DNS plane center — initialize from startup state if available.
                 match viewConfig.initialRibbonState.dnSPlane with
                 | Some plane ->
@@ -640,6 +644,13 @@ module UnifiedViewer =
                                         (current + delta).X (current + delta).Y (current + delta).Z
                 )
 
+                // T key: toggle the alignment helper visuals together (red/yellow triangles +
+                // align and scroll arrows).
+                win.Keyboard.KeyDown(Keys.T).Values.Add(fun _ ->
+                    transact (fun _ -> alignVisualsVisible.Value <- not alignVisualsVisible.Value)
+                    printfn "[ALIGN-VISUALS] visible: %b" alignVisualsVisible.Value
+                )
+
                 // Shift + MouseWheel: translate OPC2 along the connection line between point1 and point2.
                 // Camera zoom is suppressed (handled in createOrbitController via shiftHeld flag).
                 // Each scroll tick moves OPC2 by 1% of the scene diagonal towards or away from OPC1.
@@ -725,6 +736,7 @@ module UnifiedViewer =
                             else makeArrow p2 delta.Normalized delta.Length C4b.Yellow :> ISg
                     )
                     |> Sg.dynamic
+                    |> Sg.onOff alignVisualsVisible
 
                 // Scroll arrow: from pickPoint2 toward pickPoint1, length = distance between them.
                 // Reacts to pick point changes so it updates live as OPC2 moves.
@@ -737,6 +749,7 @@ module UnifiedViewer =
                             else makeArrow p2 diff.Normalized diff.Length C4b.Cyan :> ISg
                     )
                     |> Sg.dynamic
+                    |> Sg.onOff alignVisualsVisible
 
                 let makeTriangle (a : V3d) (b : V3d) (c : V3d) (color : C4b) : ISg =
                     IndexedGeometry(
@@ -779,6 +792,7 @@ module UnifiedViewer =
                         | _ -> Sg.ofList [] :> ISg
                     ) pickPoint1 originalPickPoint2 ribbonState
                     |> Sg.dynamic
+                    |> Sg.onOff alignVisualsVisible
 
                 // Separate geometry (affected by wireframe) from overlays (always solid)
                 let geometryScene =
