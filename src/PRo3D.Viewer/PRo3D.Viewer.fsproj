@@ -18,6 +18,7 @@
     <Compile Include="DnSPlane\RibbonShaders.fs" />
     <Compile Include="DnSPlane\DnsScene.fs" />
     <Compile Include="DnSPlane\RibbonScene.fs" />
+    <Compile Include="DnSPlane\RoseDiagram.fs" />
     <Compile Include="Utils.fs" />
     <Compile Include="Data.fs" />
     <Compile Include="Diff\DiffInfo.fs" />

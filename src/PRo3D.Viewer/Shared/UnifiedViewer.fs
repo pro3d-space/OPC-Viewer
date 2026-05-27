@@ -801,11 +801,17 @@ module UnifiedViewer =
                     // "Could not find uniform" warnings.  Per-OPC inner uniforms override this.
                     |> Sg.uniform "AlignmentTranslation" (AVal.constant V3d.Zero)
 
+                // Static 2D dip-direction rose diagram in the top-left corner. Computed once
+                // from the startup selection; uses DefaultSurfaces.trafo (no AlignmentTranslation).
+                let roseOverlay =
+                    RoseDiagram.build win.Sizes config.sky
+                        viewConfig.initialRibbonState.allPolylines
+
                 // Create offscreen buffer for view mode
-                let buffer = 
+                let buffer =
                     let c = clear { colors [DefaultSemantic.Colors, config.backgroundColor;]; depth 1.0; }
                     let output = Set.ofList [ DefaultSemantic.Colors; pickIdSym; DefaultSemantic.DepthStencil ]
-                    combinedScene
+                    (combinedScene |> Sg.andAlso roseOverlay)
                     |> Sg.compile runtime framebufferSignature
                     |> RenderTask.renderSemanticsWithClear output win.Sizes c
 
